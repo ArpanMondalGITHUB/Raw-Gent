@@ -1,0 +1,45 @@
+# Bytecode files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments (Poetry manages this separately)
+.env/
+.venv/
+venv/
+
+# Poetry virtualenvs stored elsewhere
+# No need to ignore anything specific, just avoid adding system paths
+
+# VS Code settings
+.vscode/
+
+# Python tooling
+poetry.lock
+*.egg-info/
+dist/
+build/
+
+# OS and editor stuff
+.DS_Store
+Thumbs.db
+
+# Logs and cache
+*.log
+.cache/
+*.sqlite3
+
+# Secrets
+.env
+.env.*
+
+# Pytest and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE folders
+.idea/
+
+.github
+private-key.pem
