@@ -28,7 +28,7 @@ async def auth_callback(request:Request):
     
     user_data = await get_github_user(access_token)
 
-    response = RedirectResponse("http://localhost:5173/home")
+    response = RedirectResponse("https://rawgent.vercel.app/home")
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -54,7 +54,7 @@ async def redirect_home(request: Request):
     installation_id = request.query_params.get("installation_id")
     print("📦 Redirect-home installation_id:", installation_id)
 
-    response = RedirectResponse("http://localhost:5173/home")
+    response = RedirectResponse("https://rawgent.vercel.app/home")
 
     if installation_id:
         response.set_cookie(
