@@ -1,9 +1,8 @@
 from fastapi import APIRouter , Request
 from starlette.responses import RedirectResponse , JSONResponse
 from auth import get_github_authorization_url
-from services.github_app_service import get_repos_from_installation, get_user_installation_id
-from github.github_app_client import generate_jwt, get_installation_access_token
-from github.github_client import get_github_access_token , get_github_user , get_user_repo_list
+from services.github_app_service import get_repos_from_installation
+from github.github_client import get_github_access_token , get_github_user 
 
 router = APIRouter()
 
@@ -28,16 +27,23 @@ async def auth_callback(request:Request):
     
     user_data = await get_github_user(access_token)
 
-    response = RedirectResponse("https://rawgent.vercel.app/home")
+    response = RedirectResponse("https://raw-gent.vercel.app/home")
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
         secure=True,
         samesite="None",
-        domain=".ngrok-free.app"
+        domain=".vercel.app"
     )
     return response
+
+@router.get("/welcome")
+async def welcome(request: Request):
+    token = request.cookies.get("access_token")
+    if not token:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return JSONResponse({"message": "Welcome! You're logged in with GitHub."})
 
 
 @router.get("/callback")
@@ -54,7 +60,7 @@ async def redirect_home(request: Request):
     installation_id = request.query_params.get("installation_id")
     print("📦 Redirect-home installation_id:", installation_id)
 
-    response = RedirectResponse("https://rawgent.vercel.app/home")
+    response = RedirectResponse("https://raw-gent.vercel.app/home")
 
     if installation_id:
         response.set_cookie(
@@ -63,20 +69,10 @@ async def redirect_home(request: Request):
             httponly=True,
             secure=True,  # ✅ because you're now on HTTPS (ngrok)
             samesite="None",  # ✅ must be 'None' to send across domains
-            domain=".ngrok-free.app"  # ✅ this is crucial
+            domain=".vercel.app"  # ✅ this is crucial
         )
-
-    return response
-
-
-
-@router.get("/welcome")
-async def welcome(request: Request):
-    token = request.cookies.get("access_token")
-    if not token:
-        return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    return JSONResponse({"message": "Welcome! You're logged in with GitHub."})
-
+        print(f"response:{response}")
+        return response
 
 @router.get("/installation-repos")
 async def list_installation_repos(request: Request):
@@ -91,7 +87,6 @@ async def list_installation_repos(request: Request):
     except Exception as e:
         print(f"[ERROR] Failed to get repos from installation: {e}")
         return JSONResponse({"error": "Failed to fetch repositories"}, status_code=500)
-
 
 
 # @router.get("/user-repos")

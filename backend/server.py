@@ -10,9 +10,8 @@ app.include_router(webhook.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "https://amazed-infinitely-marten.ngrok-free.app"
-    ],  # Frontend dev origin and ngrok domain
+        "https://raw-gent.vercel.app/"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -3,6 +3,28 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    {
+      "source": "/api/:match*",
+      "destination": "https://amazed-infinitely-marten.ngrok-free.app/api/:match*"
+    },
+    {
+      "source": "/installation-repos",
+      "destination": "https://amazed-infinitely-marten.ngrok-free.app/installation-repos"
+    },
+    {
+      "source": "/welcome",
+      "destination": "https://amazed-infinitely-marten.ngrok-free.app/welcome"
+    },
+    {
+      "source": "/auth/callback",
+      "destination": "https://amazed-infinitely-marten.ngrok-free.app/auth/callback"
+    },
+    {
+      "source": "/redirect-home",
+      "destination": "https://amazed-infinitely-marten.ngrok-free.app/redirect-home"
+    },
+    { 
+      "source": "/(.*)", "destination": "/" 
+    }
   ]
 }
