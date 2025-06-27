@@ -33,6 +33,7 @@ export function MainContent() {
       setPending(true);
       try {
         const data = await fetchInstallRepos();
+        console.log("📦 Repo Data:", data);
         setRepos(data.repositories || []);
       } catch (error) {
         console.error("Failed to fetch repos", error);
