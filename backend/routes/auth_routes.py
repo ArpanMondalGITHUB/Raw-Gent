@@ -1,7 +1,6 @@
 from fastapi import APIRouter , Request
 from starlette.responses import RedirectResponse , JSONResponse
 from auth import get_github_authorization_url
-from services.github_app_service import get_repos_from_installation
 from github.github_client import get_github_access_token , get_github_user 
 
 router = APIRouter()
@@ -58,35 +57,23 @@ async def github_app_callback(request: Request):
 @router.get("/redirect-home")
 async def redirect_home(request: Request):
     installation_id = request.query_params.get("installation_id")
-    print("📦 Redirect-home installation_id:", installation_id)
+    return RedirectResponse(f"/set-cookie?installation_id={installation_id}")
 
+
+@router.get("/set-cookie")
+async def set_cookie_and_redirect(request:Request):
+    installation_id = request.query_params.get("installation_id")
+    print("📦 Set-cookie got:", installation_id)
     response = RedirectResponse("https://raw-gent.vercel.app/home")
 
-    if installation_id:
-        response.set_cookie(
-            key="installation_id",
-            value=installation_id,
-            httponly=True,
-            secure=True,  # ✅ because you're now on HTTPS (ngrok)
-            samesite="None",  # ✅ must be 'None' to send across domains
-            domain=".vercel.app"  # ✅ this is crucial
-        )
-        print(f"response:{response}")
-        return response
-
-@router.get("/installation-repos")
-async def list_installation_repos(request: Request):
-    print("🧪 Incoming cookies:", request.cookies)
-    installation_id = request.cookies.get("installation_id")
-    if not installation_id:
-        return JSONResponse({"error": "GitHub App not installed or installation_id missing"}, status_code=400)
-
-    try:
-        repos_data = await get_repos_from_installation(installation_id)
-        return JSONResponse({"repositories": repos_data["repositories"]})
-    except Exception as e:
-        print(f"[ERROR] Failed to get repos from installation: {e}")
-        return JSONResponse({"error": "Failed to fetch repositories"}, status_code=500)
+    response.set_cookie(
+        key="installation_id",
+        value=installation_id,
+        httponly=True,
+        secure=True,
+        samesite="None"
+    )
+    return response
 
 
 # @router.get("/user-repos")
