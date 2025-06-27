@@ -5,23 +5,23 @@
   "rewrites": [
     {
       "source": "/api/:match*",
-      "destination": "https://amazed-infinitely-marten.ngrok-free.app/api/:match*"
+      "destination": "https://raw-gent.onrender.com/api/:match*"
     },
     {
       "source": "/installation-repos",
-      "destination": "https://amazed-infinitely-marten.ngrok-free.app/installation-repos"
+      "destination": "https://raw-gent.onrender.com/installation-repos"
     },
     {
       "source": "/welcome",
-      "destination": "https://amazed-infinitely-marten.ngrok-free.app/welcome"
+      "destination": "https://raw-gent.onrender.com/welcome"
     },
     {
       "source": "/auth/callback",
-      "destination": "https://amazed-infinitely-marten.ngrok-free.app/auth/callback"
+      "destination": "https://raw-gent.onrender.com/callback"
     },
     {
       "source": "/redirect-home",
-      "destination": "https://amazed-infinitely-marten.ngrok-free.app/redirect-home"
+      "destination": "https://raw-gent.onrender.com/redirect-home"
     },
     { 
       "source": "/(.*)", "destination": "/" 

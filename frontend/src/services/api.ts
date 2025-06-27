@@ -1,6 +1,6 @@
 import axios from "axios"
 
-const baseURL = "https://amazed-infinitely-marten.ngrok-free.app"
+const baseURL = "https://raw-gent.onrender.com"
 
 console.log("baseURL:",baseURL)
 
@@ -9,7 +9,6 @@ const apiClient  = axios.create(
         baseURL,
         headers:{
             'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
         },
         withCredentials: true
     }
