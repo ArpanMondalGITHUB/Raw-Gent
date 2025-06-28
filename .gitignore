@@ -44,3 +44,4 @@ htmlcov/
 .github
 private-key.pem
 node_modules
+private-key.pem
