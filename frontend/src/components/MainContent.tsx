@@ -4,6 +4,8 @@ import {
   ArrowRight,
   Play,
   Lightbulb,
+  Plus,
+  Check,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -11,33 +13,57 @@ import { useEffect, useState } from "react";
 import { installGithubApp } from "../services/github";
 import { fetchInstallRepos } from "../services/github_api";
 
+interface RepoType {
+  id: number;
+  full_name: string;
+  // ... other properties
+}
+
 export function MainContent() {
   const [selectedbranch, setSelectedbranch] = useState("(empty repo)");
-  const [selectedRepo, setSelectedRepo] = useState("Add Repository");
+  const [selectedRepo, setSelectedRepo] = useState<RepoType | null >(null);
   const [inputValue, setInputValue] = useState("");
   const [pending, setPending] = useState(false);
   const [repos, setRepos] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const handleinstallGithubApp = () => {
     installGithubApp();
   };
 
-  useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
-  const hasInstall = params.get("installation_id");
+  const handleRepoSelect = (repo) => {
+    setSelectedRepo(repo);
+    setShowDropdown(false);
+    // Update branch when repo changes
+    setSelectedbranch("main"); // or fetch actual default branch
+  };
 
-  if (hasInstall) {
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasInstall = params.get("installation_id");
+
+    if (hasInstall) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
     const loadrepos = async () => {
       setPending(true);
       try {
         const data = await fetchInstallRepos();
         console.log("📦 Repo Data:", data);
-        setRepos(data.repositories || []);
+        const repositories = data.repositories || [];
+        setRepos(repositories);
+        setHasInitialized(true);
+
+        // Auto-select the first repository
+        if (repositories.length > 0) {
+          setSelectedRepo(repositories[0]);
+          setSelectedbranch("main"); // or fetch actual default branch
+        }
       } catch (error) {
         console.error("Failed to fetch repos", error);
         setRepos([]);
+        setHasInitialized(true);
       } finally {
         setPending(false);
       }
@@ -63,43 +89,119 @@ export function MainContent() {
       {/* Main Content */}
       <div className="flex-1 p-6">
         <div className="max-w-4xl mx-auto">
-          {/* Repository Selection */}
           <div className="mb-8">
             <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
+                {/* Repository Section */}
+                <div className="flex items-center gap-2 flex-1 mr-4">
+                  <GitBranch className="w-5 h-5 text-gray-500" />
+
+                  {/* Repository Selection Logic */}
+                  {!hasInitialized ? (
+                    // Initial state - Add Repository button
+                    <Button
+                      variant="ghost"
+                      className="text-gray-400 justify-between w-48"
+                      onClick={handleinstallGithubApp}
+                      disabled={pending}
+                    >
+                      {pending ? (
+                        <>
+                          <span className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                            Loading...
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          Add Repository
+                          <Plus className="w-4 h-4" />
+                        </>
+                      )}
+                    </Button>
+                  ) : selectedRepo ? (
+                    // Selected repository with dropdown
+                    <div className="relative">
+                      <Button
+                        variant="ghost"
+                        className="text-gray-300 justify-between w-64 hover:bg-gray-800"
+                        onClick={() => setShowDropdown(!showDropdown)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-green-500" />
+                          <span className="truncate">
+                            {selectedRepo.full_name}
+                          </span>
+                        </div>
+                        <ChevronDown
+                          className={`w-4 h-4 transition-transform ${
+                            showDropdown ? "rotate-180" : ""
+                          }`}
+                        />
+                      </Button>
+
+                      {/* Repository Dropdown */}
+                      {showDropdown && (
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                          {repos.length > 0 ? (
+                            <div className="py-2">
+                              {/* Other repositories */}
+                              {repos
+                                .filter((repo) => repo.id !== selectedRepo.id)
+                                .map((repo) => (
+                                  <button
+                                    key={repo.id}
+                                    onClick={() => handleRepoSelect(repo)}
+                                    className="w-full text-left px-4 py-3 text-gray-300 hover:bg-gray-700 transition-colors"
+                                  >
+                                    <div className="font-medium">
+                                      {repo.full_name}
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                      {repo.name}
+                                    </div>
+                                  </button>
+                                ))}
+
+                              {/* Add more repositories button */}
+                              <div className="border-t border-gray-700 mt-2 pt-2">
+                                <button
+                                  onClick={handleinstallGithubApp}
+                                  className="w-full text-left px-4 py-3 text-blue-400 hover:bg-gray-700 transition-colors flex items-center gap-2"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  Add more repositories
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-4 text-gray-500 text-center">
+                              No other repositories found
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    // No repos available
+                    <Button
+                      variant="ghost"
+                      className="text-gray-400 justify-between w-48"
+                      onClick={handleinstallGithubApp}
+                    >
+                      No repositories found
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* Branch Section */}
                 <div className="flex items-center gap-2">
                   <GitBranch className="w-5 h-5 text-gray-500" />
                   <Button
                     variant="ghost"
                     className="text-gray-400 justify-between w-48"
-                    onClick={handleinstallGithubApp}
-                  >
-                    {selectedRepo}
-                    <ChevronDown className="w-4 h-4" />
-                    {repos.length > 0 ? (
-                      <select
-                        value={selectedRepo}
-                        onChange={(e) => setSelectedRepo(e.target.value)}
-                        className="bg-gray-800 text-white px-4 py-2 rounded"
-                      >
-                        <option disabled value="Add Repository">
-                          Select a Repository
-                        </option>
-                        {(repos || []).map((repo) => (
-                          <option key={repo.id} value={repo.name}>
-                            {repo.full_name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : ( null
-                    )}
-                  </Button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <GitBranch className="w-5 h-5 text-gray-500" />
-                  <Button
-                    variant="ghost"
-                    className="text-gray-400  justify-between w-48"
+                    disabled={!selectedRepo}
                   >
                     {selectedbranch}
                     <ChevronDown className="w-4 h-4" />
