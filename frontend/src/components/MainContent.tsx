@@ -11,20 +11,15 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { useEffect, useState } from "react";
 import { installGithubApp } from "../services/github";
-import { fetchInstallRepos } from "../services/github_api";
-
-interface RepoType {
-  id: number;
-  full_name: string;
-  // ... other properties
-}
+import { fetchbranch, fetchInstallRepos } from "../services/github_api";
 
 export function MainContent() {
   const [selectedbranch, setSelectedbranch] = useState("(empty repo)");
-  const [selectedRepo, setSelectedRepo] = useState<RepoType | null >(null);
+  const [selectedRepo, setSelectedRepo] = useState<RepoType | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [pending, setPending] = useState(false);
   const [repos, setRepos] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
 
@@ -32,11 +27,24 @@ export function MainContent() {
     installGithubApp();
   };
 
-  const handleRepoSelect = (repo) => {
+  const handleRepoSelect = async(repo) => {
     setSelectedRepo(repo);
     setShowDropdown(false);
-    // Update branch when repo changes
-    setSelectedbranch("main"); // or fetch actual default branch
+    try {
+      const branchresponse = await fetchbranch(repo.name);
+      const branchesdata = branchresponse.Branches || [];
+      setBranches(branchesdata);
+
+      if (branchesdata.length > 0) {
+        setSelectedbranch(branchesdata[0].name);
+      } else {
+        setSelectedbranch("(empty repo)");
+      }
+    } catch (error) {
+      console.error("Failed to fetch branches", error);
+      setBranches([]);
+      setSelectedbranch("(empty repo)");
+    }
   };
 
   useEffect(() => {
@@ -57,8 +65,16 @@ export function MainContent() {
 
         // Auto-select the first repository
         if (repositories.length > 0) {
-          setSelectedRepo(repositories[0]);
-          setSelectedbranch("main"); // or fetch actual default branch
+          const firstrepo = repositories[0];
+          setSelectedRepo(firstrepo);
+
+          const branchresponse = await fetchbranch(firstrepo.name);
+          const branchesdata = branchresponse.Branches || [];
+          setBranches(branchesdata);
+
+          if (branchesdata.length > 0) {
+            setSelectedbranch(branchesdata[0].name);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch repos", error);
@@ -198,6 +214,33 @@ export function MainContent() {
                 {/* Branch Section */}
                 <div className="flex items-center gap-2">
                   <GitBranch className="w-5 h-5 text-gray-500" />
+
+                  {branches.length > 0 ? (
+                    <select
+                      value={selectedbranch}
+                      onChange={(e) => setSelectedbranch(e.target.value)}
+                      className="bg-gray-800 text-white px-4 py-2 rounded w-48"
+                    >
+                      {branches.map((branch) => (
+                        <option key={branch.name} value={branch.name}>
+                          {branch.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      className="text-gray-400 justify-between w-48"
+                      disabled
+                    >
+                      {selectedbranch}
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* <div className="flex items-center gap-2">
+                  <GitBranch className="w-5 h-5 text-gray-500" />
                   <Button
                     variant="ghost"
                     className="text-gray-400 justify-between w-48"
@@ -206,7 +249,7 @@ export function MainContent() {
                     {selectedbranch}
                     <ChevronDown className="w-4 h-4" />
                   </Button>
-                </div>
+                </div> */}
               </div>
 
               <div className="relative">
