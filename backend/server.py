@@ -12,7 +12,7 @@ app.include_router(agent_runner.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        FRONTEND_URL
+        "https://raw-gent.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
