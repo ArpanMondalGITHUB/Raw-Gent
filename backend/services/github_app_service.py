@@ -83,4 +83,11 @@ async def get_repo_branches(installation_id:str , repo_name:str):
         )
         branches_response.raise_for_status()
         return branches_response.json()
+
+
+async def mint_installation_token(installation_id: str) -> str:
+    """Return a short-lived installation access token for a given installation_id."""
+    jwt_token = generate_jwt()
+    access_token_data = await get_installation_access_token(jwt_token, installation_id)
+    return access_token_data["token"]
         

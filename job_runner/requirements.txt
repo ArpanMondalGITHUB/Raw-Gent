@@ -1,0 +1,10 @@
+google-cloud-run
+google-cloud-storage
+google-cloud-aiplatform
+google-adk
+requests
+httpx
+google-genai
+google-cloud-logging
+asyncio
+subprocess
