@@ -12,8 +12,11 @@ import { Textarea } from "../components/ui/textarea";
 import { useEffect, useState } from "react";
 import { installGithubApp } from "../services/github";
 import { fetchbranch, fetchInstallRepos } from "../services/github_api";
+import { runagent } from "../services/run_agent";
+import { Navigate, useNavigate } from "react-router-dom";
 
 export function MainContent() {
+  const navigate = useNavigate();
   const [selectedbranch, setSelectedbranch] = useState("(empty repo)");
   const [selectedRepo, setSelectedRepo] = useState<RepoType | null>(null);
   const [inputValue, setInputValue] = useState("");
@@ -22,6 +25,45 @@ export function MainContent() {
   const [branches, setBranches] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
+
+  const handleRunAgent = async() => {
+    if (!inputValue.trim()) {
+      alert("Please enter a prompt");
+      return;
+    }
+    if (!selectedRepo) {
+      alert("Please select a valid repo");
+      return;
+    }
+
+    setPending(true);
+
+    try {
+      const result =await runagent(
+        inputValue,
+        selectedRepo.full_name,
+        selectedRepo.id,
+        selectedbranch
+      );
+
+      const taskData = {
+        job_id : result.job_id || null,
+        prompt: inputValue,
+        repo: selectedRepo.full_name,
+        branch: selectedbranch,
+        status: "queued",
+        createdAt: new Date().toISOString()
+      }
+      sessionStorage.setItem('currentTask',JSON.stringify(taskData));
+      navigate('/task', { state: taskData });
+      
+    } catch (error) {
+      console.error("Agent failed:", error);
+      alert("Failed to run agent. Please try again.");
+    } finally {
+    setPending(false);
+    }
+  }
 
   const handleinstallGithubApp = () => {
     installGithubApp();
@@ -238,18 +280,6 @@ export function MainContent() {
                     </Button>
                   )}
                 </div>
-
-                {/* <div className="flex items-center gap-2">
-                  <GitBranch className="w-5 h-5 text-gray-500" />
-                  <Button
-                    variant="ghost"
-                    className="text-gray-400 justify-between w-48"
-                    disabled={!selectedRepo}
-                  >
-                    {selectedbranch}
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </div> */}
               </div>
 
               <div className="relative">
@@ -262,6 +292,7 @@ export function MainContent() {
                 <Button
                   className="absolute bottom-4 right-4 bg-gray-700 hover:bg-gray-600 text-gray-300"
                   size="sm"
+                  onClick={handleRunAgent}
                 >
                   Give me a plan
                   <ArrowRight className="w-4 h-4 ml-1" />

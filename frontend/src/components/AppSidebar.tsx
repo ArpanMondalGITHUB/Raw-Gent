@@ -8,7 +8,7 @@ export function AppSidebar() {
   const [isCodebasesExpanded, setIsCodebasesExpanded] = useState(true);
 
   return (
-    <div className="w-64 h-screen bg-[#0a0a0a]  border-r border-gray-800 flex flex-col">
+    <div className="left-0 top-0 absolute w-64 h-screen bg-[#141316] border-gray-800 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-gray-800">
         <div className="flex items-center gap-2 mb-4">

@@ -2,7 +2,7 @@ from fastapi import APIRouter , Request
 from starlette.responses import RedirectResponse , JSONResponse
 from auth import get_github_authorization_url
 from github.github_client import get_github_access_token , get_github_user 
-
+from core.config import FRONTEND_URL
 router = APIRouter()
 
 @router.get('/login')
@@ -26,7 +26,7 @@ async def auth_callback(request:Request):
     
     user_data = await get_github_user(access_token)
 
-    response = RedirectResponse("https://raw-gent.vercel.app/home")
+    response = RedirectResponse(FRONTEND_URL)
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -64,7 +64,7 @@ async def redirect_home(request: Request):
 async def set_cookie_and_redirect(request:Request):
     installation_id = request.query_params.get("installation_id")
     print("📦 Set-cookie got:", installation_id)
-    response = RedirectResponse("https://raw-gent.vercel.app/home")
+    response = RedirectResponse(FRONTEND_URL)
 
     response.set_cookie(
         key="installation_id",
