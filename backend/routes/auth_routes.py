@@ -26,7 +26,7 @@ async def auth_callback(request:Request):
     
     user_data = await get_github_user(access_token)
 
-    response = RedirectResponse("https://raw-gent.vercel.app")
+    response = RedirectResponse(f"{FRONTEND_URL}/home")
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -64,7 +64,7 @@ async def redirect_home(request: Request):
 async def set_cookie_and_redirect(request:Request):
     installation_id = request.query_params.get("installation_id")
     print("📦 Set-cookie got:", installation_id)
-    response = RedirectResponse("https://raw-gent.vercel.app")
+    response = RedirectResponse(f"{FRONTEND_URL}/home")
 
     response.set_cookie(
         key="installation_id",
