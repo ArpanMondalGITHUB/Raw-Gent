@@ -6,5 +6,3 @@ requests
 httpx
 google-genai
 google-cloud-logging
-asyncio
-subprocess
