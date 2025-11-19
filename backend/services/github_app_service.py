@@ -37,6 +37,8 @@ async def get_repos_from_installation(installation_id: str) -> dict:
         )
         response.raise_for_status()
         repos_data = response.json()
+        for repo in repos_data.get("repositories", []):
+            repo["installation_id"] = installation_id
         print("repos_data:", repos_data)
         return repos_data
 
@@ -90,4 +92,3 @@ async def mint_installation_token(installation_id: str) -> str:
     jwt_token = generate_jwt()
     access_token_data = await get_installation_access_token(jwt_token, installation_id)
     return access_token_data["token"]
-        

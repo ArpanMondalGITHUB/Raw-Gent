@@ -25,6 +25,7 @@ export function MainContent() {
   const [branches, setBranches] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [installationid,setInstallationId] = useState<number | null>(null)
 
   const handleRunAgent = async() => {
     if (!inputValue.trim()) {
@@ -36,13 +37,18 @@ export function MainContent() {
       return;
     }
 
+    if(!installationid){
+      alert("Installation ID not found. Please reinstall the GitHub App.")
+      return;
+    }
+
     setPending(true);
 
     try {
       const result =await runagent(
         inputValue,
         selectedRepo.full_name,
-        selectedRepo.id,
+        installationid,
         selectedbranch
       );
 
@@ -93,8 +99,18 @@ export function MainContent() {
     const params = new URLSearchParams(window.location.search);
     const hasInstall = params.get("installation_id");
 
+    // ✅ Store installation_id if present in URL
     if (hasInstall) {
+      const instId = parseInt(hasInstall);
+      setInstallationId(instId);
+      sessionStorage.setItem('github_installation_id', hasInstall); // Store in sessionStorage
       window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      // ✅ Try to retrieve from sessionStorage
+      const storedInstallId = sessionStorage.getItem('github_installation_id');
+      if (storedInstallId) {
+        setInstallationId(parseInt(storedInstallId));
+      }
     }
     const loadrepos = async () => {
       setPending(true);
@@ -109,7 +125,14 @@ export function MainContent() {
         if (repositories.length > 0) {
           const firstrepo = repositories[0];
           setSelectedRepo(firstrepo);
-
+          // ✅ Convert string to number
+          if (firstrepo.installation_id) {
+            const instId = typeof firstrepo.installation_id === 'string'
+              ? parseInt(firstrepo.installation_id)
+              : firstrepo.installation_id;
+            setInstallationId(instId);
+            sessionStorage.setItem('github_installation_id', instId.toString());
+          }
           const branchresponse = await fetchbranch(firstrepo.name);
           const branchesdata = branchresponse.Branches || [];
           setBranches(branchesdata);
