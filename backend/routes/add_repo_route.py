@@ -14,7 +14,9 @@ async def list_installation_repos(request: Request):
 
     try:
         repos_data = await get_repos_from_installation(installation_id)
-        return JSONResponse({"repositories": repos_data["repositories"]})
+        repos = repos_data.get("repositories",[])
+        # return JSONResponse({"repositories": repos_data["repositories"]})
+        return JSONResponse({"repositories": repos})
     except Exception as e:
         print(f"[ERROR] Failed to get repos from installation: {e}")
         return JSONResponse({"error": "Failed to fetch repositories"}, status_code=500)
