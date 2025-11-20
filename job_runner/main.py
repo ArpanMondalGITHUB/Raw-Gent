@@ -1,7 +1,7 @@
 import os
 import subprocess
 import tempfile
-from backend.Raw_Gent.main_agent import root_agent
+from Raw_Gent.main_agent import root_agent
 import logging
 import google.cloud.logging
 import sys
