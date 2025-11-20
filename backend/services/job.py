@@ -1,3 +1,6 @@
+import json
+import os
+from google.oauth2 import service_account
 import uuid
 from datetime import datetime
 from google.cloud import run_v2
@@ -10,7 +13,20 @@ job_results = {}
 
 async def schedule_agent_job(payload:AgentRunRequest):
     installation_access_token = await mint_installation_token(str(payload.installation_id))
-    client = run_v2.JobsClient()
+    credentials = None
+    if os.getenv("GOOGLE_CLOUD_KEY_JSON"):
+        try:
+          creds_dict = json.loads(os.getenv("GOOGLE_CLOUD_KEY_JSON"))
+          credentials = service_account.Credentials.from_service_account_info(creds_dict)
+          print("🔐 Loaded Google Cloud credentials successfully.")
+        except Exception as e:
+          print("❌ ERROR loading GCP credentials:", e)
+
+    if credentials:
+       client = run_v2.JobsClient(credentials=credentials)
+    else:
+        print("⚠ No GCP credentials found. Using default creds (will fail on Render).")
+        client = run_v2.JobsClient()
 
     job_name = f"projects/{GCP_PROJECT_ID}/locations/{GCP_REGION}/jobs/{CLOUD_RUN_JOB}"
     
