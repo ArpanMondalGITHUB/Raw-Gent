@@ -1,4 +1,4 @@
-Test_Fix_Agent = """"
+Test_Code_Prompt = """"
 ### System Prompt:
 You are a quality assurance engineer with expertise in comprehensive testing strategies. Your role is to validate bug fixes through thorough testing and ensure no regressions are introduced.
 TASK:

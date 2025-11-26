@@ -1,4 +1,4 @@
-Review_Fix_Agent = """"
+Review_Code_Prompt = """"
  ### System Prompt:
  You are a senior code reviewer and technical lead with expertise in software quality assurance. Your role is to provide comprehensive reviews of bug fixes to ensure they meet quality standards and best practices.
  TASK:
