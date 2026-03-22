@@ -2,18 +2,11 @@ import asyncio
 from datetime import datetime
 import json
 import logging
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, logger
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from services.job import get_job_status, schedule_agent_job
 from models.agent_model import JobStatusResponse, RunAgentRequest , RunAgentResponse
 from services.ws import manager
 from services.redis import redisservices
-import google.cloud.logging
-
-# init cloud loging client
-client = google.cloud.logging.Client()
-
-# route python logs to  cloud loging
-client.setup_logging()
 
 logging.basicConfig(
     level=logging.INFO,
