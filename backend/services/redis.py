@@ -1,7 +1,6 @@
 import json
 import logging
 from typing import Optional
-import google.cloud.logging
 import redis.asyncio as redis
 from core.config import REDIS_URL
 
