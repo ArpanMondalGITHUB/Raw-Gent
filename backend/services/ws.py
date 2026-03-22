@@ -3,10 +3,6 @@ from datetime import datetime
 import logging
 from typing import Dict, List
 from fastapi import WebSocket
-import google.cloud.logging
-# init cloud loging client
-
-# route python logs to  cloud loging
 
 logging.basicConfig(
     level=logging.INFO,
