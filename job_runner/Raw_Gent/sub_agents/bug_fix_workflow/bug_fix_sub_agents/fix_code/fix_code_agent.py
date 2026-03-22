@@ -3,7 +3,7 @@ from .fix_code_prompt import Fix_Code_Prompt
 
 Fix_Code_Agent = LlmAgent(
     name="fix_code",
-    model="gemini-2.0-flash",
+    model="gemini-3.1-flash-lite-preview",
     description="",
     instruction=Fix_Code_Prompt
 )

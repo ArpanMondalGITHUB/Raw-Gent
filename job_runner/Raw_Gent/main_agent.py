@@ -8,7 +8,7 @@ from .sub_agents.test_workflow import test_workflow_agent
 
 root_agent = LlmAgent(
     name="Raw_Gent",
-    model="gemini-2.5-pro",
+    model="gemini-3.1-flash-lite-preview",
     description=" you are the primary agent . Route user requests to appropriate specialist agents ",
     instruction=prompt.ROOT_AGENT,
     sub_agents=[

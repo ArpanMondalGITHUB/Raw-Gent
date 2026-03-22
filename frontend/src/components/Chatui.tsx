@@ -2,8 +2,16 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "./ui/button";
 import { ArrowRight, ChevronRight, ChevronRightIcon } from "lucide-react";
 import Editor, { DiffEditor } from "@monaco-editor/react";
+import { AgentMessage, JobStatusResponse } from "../schemas/run_agent.schemas";
 
-export function Chatui() {
+export interface ChatuiProps {
+  jobStatus: JobStatusResponse | null;
+  messages: AgentMessage[];
+  onSendMessage: (content: string) => void;
+  isConnected: boolean;
+}
+
+export function Chatui({jobStatus,messages,onSendMessage,isConnected}:ChatuiProps) {
   return (
     <div
       className="bg-[#28252b] p-0 absolute top-[48px] left-64 right-0 bottom-0 flex flex-col

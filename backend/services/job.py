@@ -1,17 +1,18 @@
 import json
 import os
+from typing import Any, Dict
 from google.oauth2 import service_account
 import uuid
 from datetime import datetime
 from google.cloud import run_v2
-from models.agent_model import AgentRunRequest
-from core.config import BACKEND_URL,GCP_PROJECT_ID,GCP_REGION,CLOUD_RUN_JOB
+from models.agent_model import FileChange, JobStatus, JobStatusResponse, RoleType, RunAgentRequest , AgentMessage
+from core.config import BACKEND_URL,GCP_PROJECT_ID,GCP_REGION,CLOUD_RUN_JOB, REDIS_URL
 from services.github_app_service import mint_installation_token
 
 # In-memory storage for results
-job_results = {}
+job_results : Dict[str, JobStatusResponse] = {}
 
-async def schedule_agent_job(payload:AgentRunRequest):
+async def schedule_agent_job(payload:RunAgentRequest):
     installation_access_token = await mint_installation_token(str(payload.installation_id))
     credentials = None
     if os.getenv("GOOGLE_CLOUD_KEY_JSON"):
@@ -33,17 +34,24 @@ async def schedule_agent_job(payload:AgentRunRequest):
     # Generate unique job ID
     job_id = str(uuid.uuid4())
     
-    # Initialize job result storage
-    job_results[job_id] = {
-        "status": "queued",
-        "final_response": None,
-        "prompt": payload.prompt,
-        "repo": payload.repo_name,
-        "branch": payload.branches,
-        "code_changes": {...},
-        "created_at": datetime.now().isoformat(),
-        "updated_at": None
-    }
+    # ✅ Initialize job result storage with proper schema
+    job_results[job_id] = JobStatusResponse(
+        job_id=job_id,
+        status=JobStatus.QUEUED,
+        messages=[
+            AgentMessage(
+                role=RoleType.AGENT,
+                content=f"Task queued: {payload.prompt}",
+                timestamp=datetime.now().isoformat()
+            )
+        ],
+        file_changes=[],
+        current_step="Waiting to start...",
+        error=None,
+        created_at=datetime.now().isoformat(),
+        updated_at=None
+    )
+
 
     request = run_v2.RunJobRequest(
         name = job_name,
@@ -57,6 +65,7 @@ async def schedule_agent_job(payload:AgentRunRequest):
                         run_v2.EnvVar(name="TOKEN", value=installation_access_token),
                         run_v2.EnvVar(name="JOB_ID", value=job_id),  # ← NEW
                         run_v2.EnvVar(name="BACKEND_URL", value=BACKEND_URL),  # ← NEW
+                        run_v2.EnvVar(name="REDIS_URL", value=REDIS_URL),
                     ]
                 )
             ]
@@ -65,4 +74,39 @@ async def schedule_agent_job(payload:AgentRunRequest):
 
     operation = client.run_job(request=request)
     response = operation.result()
-    return job_id 
+    return job_id
+
+def update_job_status(job_id: str, update: Dict[Any, Any]) -> bool:
+    if job_id not in job_results:
+        return False  # Job doesn't exist
+    
+    # ✅ Get the stored JobStatusResponse
+    current: JobStatusResponse = job_results[job_id]
+    
+    # ✅ Update it with new data from Cloud Run
+    if "status" in update:
+        current.status = JobStatus(update["status"])
+    
+    if "messages" in update:
+        current.messages = [AgentMessage(**msg) for msg in update["messages"]]
+    
+    if "file_changes" in update:
+        current.file_changes = [FileChange(**fc) for fc in update["file_changes"]]
+    
+    if "current_step" in update:
+        current.current_step = update["current_step"]
+    
+    if "error" in update:
+        current.error = update["error"]
+    
+    current.updated_at = datetime.now().isoformat()
+    
+    # ✅ Store updated status back
+    job_results[job_id] = current
+    
+    return True
+
+
+def get_job_status(job_id: str) -> JobStatusResponse | None:
+    """Get current job status"""
+    return job_results.get(job_id)

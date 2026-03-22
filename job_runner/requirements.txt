@@ -6,3 +6,4 @@ requests
 httpx
 google-genai
 google-cloud-logging
+redis

@@ -12,14 +12,15 @@ import { Textarea } from "../components/ui/textarea";
 import { useEffect, useState } from "react";
 import { installGithubApp } from "../services/github";
 import { fetchbranch, fetchInstallRepos } from "../services/github_api";
-import { runagent } from "../services/run_agent";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { RepoType } from "../schemas/repo_types.schemas";
+import agentApi from "../services/run_agent";
 
 export function MainContent() {
   const navigate = useNavigate();
   const [selectedbranch, setSelectedbranch] = useState("(empty repo)");
   const [selectedRepo, setSelectedRepo] = useState<RepoType | null>(null);
-  const [inputValue, setInputValue] = useState("");
+  const [prompt, setPrompt] = useState("");
   const [pending, setPending] = useState(false);
   const [repos, setRepos] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -28,7 +29,7 @@ export function MainContent() {
   const [installationid,setInstallationId] = useState<number | null>(null)
 
   const handleRunAgent = async() => {
-    if (!inputValue.trim()) {
+    if (!prompt.trim()) {
       alert("Please enter a prompt");
       return;
     }
@@ -45,16 +46,16 @@ export function MainContent() {
     setPending(true);
 
     try {
-      const result =await runagent(
-        inputValue,
-        selectedRepo.full_name,
-        installationid,
-        selectedbranch
-      );
+      const result =await agentApi.runAgent({
+        prompt:prompt,
+        repo_name:selectedRepo.full_name,
+        installation_id:installationid,
+        branches:selectedbranch
+      });
 
       const taskData = {
         job_id : result.job_id || null,
-        prompt: inputValue,
+        prompt: prompt,
         repo: selectedRepo.full_name,
         branch: selectedbranch,
         status: "queued",
@@ -308,8 +309,8 @@ export function MainContent() {
               <div className="relative">
                 <Textarea
                   placeholder="Help me fix this error ..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
                   className="min-h-[120px] bg-transparent border-none text-gray-300 placeholder-gray-600 resize-none text-lg p-0"
                 />
                 <Button
