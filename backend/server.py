@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI 
-from backend.routes import agent_runner_routes, internal_routes
+from routes import agent_runner_routes, internal_routes
 from routes import auth_routes , webhook , add_repo_route
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import FRONTEND_URL
