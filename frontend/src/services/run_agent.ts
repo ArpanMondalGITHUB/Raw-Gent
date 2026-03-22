@@ -1,11 +1,14 @@
+import { JobStatusResponse, RunAgentRequest, RunAgentResponse } from "@/schemas/run_agent.schemas";
 import apiClient from "./api"
+const agentApi = {
+  runAgent:async (data:RunAgentRequest): Promise<RunAgentResponse> => {
+    const response = await apiClient.post("/agent/run",data);
+    return response.data;
+  },
 
-export const runagent = async(prompt:string , repo_name:string , installation_id: number , branches:string) => {
-    const response = await apiClient.post("/agent/run", {
-    prompt,
-    repo_name,
-    installation_id,
-    branches,
-  });
-  return  response.data;
+  getJobStatus:async (job_id: string): Promise<JobStatusResponse> => {
+    const response = await apiClient.get(`/agent/status/${job_id}`)
+    return response.data
+  }
 }
+export default agentApi;

@@ -34,4 +34,5 @@ print(f"frontend url:{FRONTEND_URL}")
 
 # Backend URL
 BACKEND_URL = os.getenv("BACKEND_URL")
+REDIS_URL = os.getenv("REDIS_URL")
 

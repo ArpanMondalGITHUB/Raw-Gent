@@ -2,6 +2,7 @@ from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel
 
+
 class JobStatus(str, Enum):
     QUEUED = "queued"
     RUNNING = "running"
@@ -17,35 +18,33 @@ class RoleType(str, Enum):
     USER = "user"
     AGENT = "agent"
 
-class RunAgentRequest(BaseModel):
-    prompt:str
-    repo_name:str
-    installation_id: int
-    branches: str
+class AgentMessage(BaseModel):
+    role: RoleType
+    content: str
+    timestamp: str
 
-class RunAgentResponse(BaseModel):
-    job_id:str
-    status: str = "queued"
+class WebSocketMessageType (str,Enum):
+    USER_MESSAGE ="user_message"
+    AGENT_MESSAGE = "agent_message"
+    STATUS_UPDATE = "status_update"
+    ERROR = "error"
 
 class FileChange(BaseModel):
     file_path: str
     original_content: Optional[str] = None
     modified_content: str
-    change_type: ChangeType  # "created", "modified", "deleted"
+    change_type: ChangeType
     language: str
 
-class AgentMessage(BaseModel):
-    role: RoleType  # "agent" or "user"
-    content: str
-    timestamp: str
-
-class JobStatusResponse(BaseModel):
-    """Complete job status - stored in backend and returned to frontend"""
-    job_id: str
+class JobUpdate(BaseModel):
     status: JobStatus
-    messages: List[AgentMessage]
-    file_changes: List[FileChange]
+    messages: Optional[List[AgentMessage]] = None
+    file_changes: Optional[List[FileChange]] = None
     current_step: Optional[str] = None
     error: Optional[str] = None
-    created_at: str
-    updated_at: Optional[str] = None
+
+class WebScoketMessage(BaseModel):
+    type : WebSocketMessageType
+    content : str
+    job_id : Optional[str] = None
+    timestamp : str
