@@ -4,9 +4,6 @@ from typing import Optional
 import google.cloud.logging
 import redis.asyncio as redis
 from core.config import REDIS_URL
-client = google.cloud.logging.Client()
-
-client.setup_logging()
 
 logging.basicConfig(
     level=logging.INFO,
