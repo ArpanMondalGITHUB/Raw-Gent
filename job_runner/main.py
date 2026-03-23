@@ -16,6 +16,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from job_runner_models import AgentMessage, FileChange, JobStatus, JobUpdate, RoleType
 import redis.asyncio as redis
+import ssl
 
 # init cloud loging client
 client = google.cloud.logging.Client()
@@ -34,15 +35,33 @@ logging.basicConfig(
 redis_client:redis.Redis = None
 
 async def init_redis():
-    """Initialize Redis connection"""
+    """Initialize Redis connection with SSL support"""
     global redis_client
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    redis_client = await redis.from_url(
-        redis_url,
-        encoding="utf-8",
-        decode_responses=True
-    )
-    logging.info("✅ Connected to Redis from Cloud Run")
+    logging.info(f"redis_url:{redis_url}")
+    try:
+        # ✅ Handle SSL (rediss://) URLs properly
+        if redis_url.startswith("rediss://"):
+            redis_client = await redis.from_url(
+                redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+                ssl_cert_reqs=ssl.CERT_NONE,  # Skip SSL cert verification
+                ssl_check_hostname=False
+            )
+        else:
+            redis_client = await redis.from_url(
+                redis_url,
+                encoding="utf-8",
+                decode_responses=True
+            )
+        
+        # Test connection
+        await redis_client.ping()
+        logging.info("✅ Connected to Redis")
+    except Exception as e:
+        logging.error(f"❌ Failed to connect to Redis: {e}")
+        raise
 
 async def poll_for_user_messages(job_id: str) -> dict:
     """
@@ -75,25 +94,24 @@ async def send_agent_response_to_redis(job_id: str, message: dict):
 
     
 async def send_job_update(job_id: str, update: JobUpdate) -> None:
-    backend_url = os.getenv("BACKEND_URL")
-    logging.info(f"BACKEND_URL (from env): {backend_url}")
-    if not backend_url:
-        logging.warning("BACKEND_URL not set, skipping update")
-        return
+    """Send update via Redis pub/sub only (no HTTP)"""
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{backend_url.rstrip('/')}/internal/job-update/{job_id}",
-                json=update.model_dump(exclude_none=True),
-                timeout=30.0
-            )
-            resp.raise_for_status()
-        if resp.status_code >= 400:
-            logging.error("Backend responded %s: %s", resp.status_code, resp.text)
-        else:
-            logging.info("✅ Sent update to backend: status=%s", update.status)
-    except Exception:
-        logging.exception("❌ Failed to send job update for job_id=%s", job_id)
+        channel = f"job:{job_id}:updates"
+        
+        # Convert update to dict
+        message = {
+            "type": "status_update",
+            "content": json.dumps(update.model_dump(exclude_none=True)),
+            "job_id": job_id,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Publish to Redis
+        await redis_client.publish(channel, json.dumps(message))
+        logging.info(f"✅ Published status update to Redis: {update.status}")
+        
+    except Exception as e:
+        logging.error(f"❌ Failed to publish update: {e}")
 
 
 async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_dir: str , conversation_history: list):
@@ -239,7 +257,7 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
                 current_step="Processing..."
             ))
             
-            msg = f"📝 Agent initial response: {response_text[:500]}..."
+            msg = f"📝 Agent initial response: {response_text}"
             logging.info(msg)
             cloud_logger.log_text(msg, severity='INFO')
     
