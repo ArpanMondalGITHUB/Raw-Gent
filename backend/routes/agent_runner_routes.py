@@ -3,7 +3,7 @@ from datetime import datetime
 import json
 import logging
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from services.job import get_job_status, schedule_agent_job
+from services.job import get_job_status, schedule_agent_job, update_job_status
 from models.agent_model import JobStatusResponse, RunAgentRequest , RunAgentResponse
 from services.ws import manager
 from services.redis import redisservices
@@ -64,17 +64,8 @@ async def websocket_handler(websocket:WebSocket,job_id:str):
                         await manager.update_heartbeat(websocket=websocket,job_id=job_id)
                     # Handle usermessage
                     elif message.get("type") == "user_message":
-                        user_message = ({
-                            "type":"user_message",
-                            "data":message["content"],
-                            "timestamp":datetime.now().isoformat()
-                        })
-                    
-                    # send user message to cloud via redis queue
-                    await redisservices.add_message_to_queue(job_id=job_id,msg=message)
-
-                    # publish to redis pubsub 
-                    await redisservices.publish_message(job_id=job_id,msg=message)
+                         # send user message to cloud via redis queue
+                        await redisservices.add_message_to_queue(job_id=job_id,msg=message)
 
             except WebSocketDisconnect:
               logger.info(f"WebSocket disconnected for job {job_id}")
@@ -87,21 +78,27 @@ async def websocket_handler(websocket:WebSocket,job_id:str):
         # 2.listen to redis for the messages from cloud
         async def listen_to_redis():
             try:
-              # recieve from redis pubsub
-              async for redismessage in pubsub.listen():
-                 if redismessage.get("type") == "message":
-                    data = json.loads(redismessage["data"])
-
-                    # send to websocket
-                    await websocket.send_json(data)
-
-                    logger.debug(f"📤 Sent Redis message to WebSocket: {data.get('type')}")
-                    logging.debug(f"📤 Sent Redis message to WebSocket: {data.get('type')}")
+                async for redis_message in pubsub.listen():
+                    if redis_message.get("type") == "message":
+                        data = json.loads(redis_message["data"])
+                        
+                        # ✅ Update job status if it's a status update
+                        if data.get("type") == "status_update":
+                            try:
+                                status_data = json.loads(data["content"])
+                                update_job_status(job_id, status_data)
+                                logger.debug(f"📊 Updated job status: {status_data.get('status')}")
+                            except Exception as e:
+                                logger.error(f"❌ Failed to update status: {e}")
+                        
+                        # ✅ Forward ALL messages to WebSocket client
+                        await websocket.send_json(data)
+                        logger.debug(f"📤 Sent to WebSocket: {data.get('type')}")
 
             except Exception as e:
-              logger.error(f"Error in Redis listener: {e}")
+                logger.error(f"❌ Error in Redis listener: {e}")
               
-        # run both task 
+        # run both task in parallel
         await asyncio.gather(
            listen_to_websocket(),
            listen_to_redis()
