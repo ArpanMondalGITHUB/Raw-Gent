@@ -42,7 +42,10 @@ class JobConnectionManager:
         self._lock = asyncio.Lock()
 
         # start background task to monitor connections
-        self.monitor_task = asyncio.create_task(self._monitor_connection())
+        try:
+            self.monitor_task = asyncio.create_task(self._monitor_connection())
+        except RuntimeError:
+            self.monitor_task = None
 
     async def connect(self,websocket:WebSocket,job_id:str):
         """
