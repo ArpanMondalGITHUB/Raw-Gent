@@ -1,5 +1,6 @@
 from fastapi import APIRouter , Request
 from fastapi.responses import JSONResponse
+from core.config import COOKIE_INSTALLATION_NAME
 from services.github_app_service import get_repos_from_installation , get_repo_branches
 
 router = APIRouter()
@@ -7,8 +8,7 @@ router = APIRouter()
 
 @router.get("/installation-repos")
 async def list_installation_repos(request: Request):
-    print("🧪 Incoming cookies:", request.cookies)
-    installation_id = request.cookies.get("installation_id")
+    installation_id = request.cookies.get(COOKIE_INSTALLATION_NAME)
     if not installation_id:
         return JSONResponse({"error": "GitHub App not installed or installation_id missing"}, status_code=400)
 
@@ -24,7 +24,7 @@ async def list_installation_repos(request: Request):
 
 @router.get("/branches/{repo_name}")
 async def name(repo_name:str,request:Request):
-    installation_id = request.cookies.get("installation_id")
+    installation_id = request.cookies.get(COOKIE_INSTALLATION_NAME)
     if not installation_id:
         return JSONResponse({"error": "No installation ID"}, status_code=400)
     

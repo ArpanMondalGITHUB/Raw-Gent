@@ -1,8 +1,9 @@
 import json
 import logging
+import ssl
 from typing import Optional
 import redis.asyncio as redis
-from core.config import REDIS_URL
+from core.config import REDIS_SSL_VERIFY, REDIS_URL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,11 +19,16 @@ class RedisServices:
 
     async def connect(self):
         """ connect with redis service """
-        self.redis = await redis.from_url(
-            REDIS_URL,
-            encoding="utf-8",
-            decode_responses=True
-        )
+        redis_options = {
+            "encoding": "utf-8",
+            "decode_responses": True,
+        }
+
+        if REDIS_URL.startswith("rediss://"):
+            redis_options["ssl_cert_reqs"] = ssl.CERT_REQUIRED if REDIS_SSL_VERIFY else ssl.CERT_NONE
+            redis_options["ssl_check_hostname"] = REDIS_SSL_VERIFY
+
+        self.redis = await redis.from_url(REDIS_URL, **redis_options)
         logger.info("✅ Connected to Redis")
         logging.info("✅ Connected to Redis")
 
@@ -32,6 +38,9 @@ class RedisServices:
             await self.redis.close()
             logger.info("❌ Disconnected from Redis")
             logging.info("❌ Disconnected from Redis")
+
+    async def close(self):
+        await self.disconnect()
 
     async def publish_message(self,job_id:str,msg:dict):
         """ publish message to the job's channel for websocket broadcasting """
@@ -53,18 +62,29 @@ class RedisServices:
     async def add_message_to_queue(self,job_id:str,msg:dict):
         """ add messages to the queue for cloud """
         key = f"job:{job_id}:queue"
-        await self.redis.rpush(name=key,values=json.dumps(msg))
+        await self.redis.rpush(key, json.dumps(msg))
         logger.debug(f"📥 Added to queue {key}")
         logging.debug(f"📥 Added to queue {key}")
 
     async def get_message_from_queue(self,job_id,timeout:int=5):
         """ get the messages from cloud queue """
         key = f"job:{job_id}:queue"
-        result = await self.redis.blpop(keys=key,timeout=timeout)
+        result = await self.redis.blpop(key, timeout=timeout)
         if result:
             _, message_json = result
             return json.loads(message_json)
         return None
+
+    async def push_json(self, key: str, payload: dict):
+        await self.redis.rpush(key, json.dumps(payload))
+
+    async def pop_json(self, key: str, timeout: int = 0):
+        result = await self.redis.blpop(key, timeout=timeout)
+        if not result:
+            return None
+
+        _, payload = result
+        return json.loads(payload)
     
     async def set_job_status(self, job_id: str, status: dict):
         """Store job status in Redis"""

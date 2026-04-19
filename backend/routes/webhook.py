@@ -1,9 +1,8 @@
-# routes/webhook.py or inside your existing routes file
-
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
+
 
 @router.post("/webhook")
 async def github_webhook(request: Request):

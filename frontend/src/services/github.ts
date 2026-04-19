@@ -1,3 +1,5 @@
+import { GITHUB_APP_INSTALL_URL } from "../config/runtime";
+
 export const installGithubApp = () =>{
-    window.location.href = "https://github.com/apps/raw-gent/installations/new";
+    window.location.href = GITHUB_APP_INSTALL_URL;
 };

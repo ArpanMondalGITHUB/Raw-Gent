@@ -22,8 +22,14 @@ async def run_agent(payload: RunAgentRequest)->RunAgentResponse:
     return RunAgentResponse(job_id=job_id,status="queued")
 
 @router.get("/agent/status/{job_id}",response_model = JobStatusResponse)
-def get_agent_status(job_id:str)->JobStatusResponse:
+async def get_agent_status(job_id:str)->JobStatusResponse:
     status = get_job_status(job_id=job_id)
+    if not status:
+        stored_status = await redisservices.get_job_status(job_id=job_id)
+        if stored_status:
+            update_job_status(job_id, stored_status)
+            status = get_job_status(job_id=job_id)
+
     if not status:
         raise HTTPException(status_code=404, detail="Job not found")
     return status
@@ -42,7 +48,8 @@ async def websocket_handler(websocket:WebSocket,job_id:str):
         if status:
             await websocket.send_json({
                 "type":"status_update",
-                "data":status.dict(),
+                "content": json.dumps(status.model_dump(mode="json")),
+                "job_id": job_id,
                 "timestamp":datetime.now().isoformat()
             })
         
@@ -52,20 +59,26 @@ async def websocket_handler(websocket:WebSocket,job_id:str):
         async def listen_to_websocket():
             try:
                 while True:
-                    # recieve text
-                    data = await websocket.receive_text()
-                    # make it json
-                    message = json.loads(data)
+                    try:
+                        # recieve text
+                        data = await websocket.receive_text()
+                        # make it json
+                        message = json.loads(data)
 
-                    # evaluate message type
+                        # evaluate message type
 
-                    # Handle pong
-                    if message.get("type") == "pong":
-                        await manager.update_heartbeat(websocket=websocket,job_id=job_id)
-                    # Handle usermessage
-                    elif message.get("type") == "user_message":
-                         # send user message to cloud via redis queue
-                        await redisservices.add_message_to_queue(job_id=job_id,msg=message)
+                        # Handle pong
+                        if message.get("type") == "pong":
+                            await manager.update_heartbeat(websocket=websocket,job_id=job_id)
+                        # Handle usermessage
+                        elif message.get("type") == "user_message":
+                             # send user message to cloud via redis queue
+                            await redisservices.add_message_to_queue(job_id=job_id,msg=message)
+                            await websocket.send_json(message)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Invalid websocket payload for job {job_id}: {e}")
+                    except Exception as e:
+                        logger.error(f"Error handling websocket message for job {job_id}: {e}")
 
             except WebSocketDisconnect:
               logger.info(f"WebSocket disconnected for job {job_id}")
@@ -87,7 +100,12 @@ async def websocket_handler(websocket:WebSocket,job_id:str):
                             try:
                                 status_data = json.loads(data["content"])
                                 update_job_status(job_id, status_data)
-                                logger.debug(f"📊 Updated job status: {status_data.get('status')}")
+                                current_status = get_job_status(job_id)
+                                if current_status:
+                                    full_status = current_status.model_dump(mode="json")
+                                    data["content"] = json.dumps(full_status)
+                                    await redisservices.set_job_status(job_id, full_status)
+                                    logger.debug(f"📊 Updated job status: {full_status.get('status')}")
                             except Exception as e:
                                 logger.error(f"❌ Failed to update status: {e}")
                         

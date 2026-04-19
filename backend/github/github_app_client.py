@@ -1,24 +1,30 @@
 import jwt as pyjwt
 import time
-from core.config import GITHUB_APP_CLIENT_ID, GITHUB_PRIVATE_KEY_PATH
-import httpx
-import os
+from pathlib import Path
 
-print(f"GITHUB_APP_ID :{GITHUB_APP_CLIENT_ID} , GITHUB_PRIVATE_KEY_PATH : {GITHUB_PRIVATE_KEY_PATH}")
+from core.config import GITHUB_APP_CLIENT_ID, GITHUB_PRIVATE_KEY, GITHUB_PRIVATE_KEY_PATH
+import httpx
+
+
+def _load_private_key() -> str:
+    if GITHUB_PRIVATE_KEY:
+        return GITHUB_PRIVATE_KEY.replace("\\n", "\n")
+
+    if GITHUB_PRIVATE_KEY_PATH:
+        return Path(GITHUB_PRIVATE_KEY_PATH).read_text(encoding="utf-8")
+
+    raise RuntimeError("Missing GITHUB_PRIVATE_KEY or GITHUB_PRIVATE_KEY_PATH")
 
 
 def generate_jwt():
     now = int(time.time())
-    private_key = os.getenv("GITHUB_PRIVATE_KEY_PATH")
-    if not private_key:
-        return RuntimeError("Missing GITHUB_PRIVATE_KEY env variable")
+    private_key = _load_private_key()
 
     payload = {
         "iat": now,
         "exp": now + 600,
         "iss": GITHUB_APP_CLIENT_ID
     }
-    print(f"payload:{payload}")
     return pyjwt.encode(payload, private_key, algorithm="RS256")
     
 

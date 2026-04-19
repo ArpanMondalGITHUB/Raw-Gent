@@ -4,27 +4,8 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "https://raw-gent.onrender.com/api/:match*"
-    },
-    {
-      "source": "/installation-repos",
-      "destination": "https://raw-gent.onrender.com/installation-repos"
-    },
-    {
-      "source": "/welcome",
-      "destination": "https://raw-gent.onrender.com/welcome"
-    },
-    {
-      "source": "/auth/callback",
-      "destination": "https://raw-gent.onrender.com/callback"
-    },
-    {
-      "source": "/redirect-home",
-      "destination": "https://raw-gent.onrender.com/redirect-home"
-    },
-    { 
-      "source": "/(.*)", "destination": "/" 
+      "source": "/(.*)",
+      "destination": "/"
     }
   ]
 }

@@ -10,13 +10,13 @@ const Task = () => {
      // ✅ Use WebSocket hook
     const { isConnected, jobStatus, messages, onSendMessage } = useWebsocket(taskData?.job_id);
 
-    // if (!taskData?.job_id) {
-    //     return (
-    //         <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
-    //             <p className="text-red-500">No job ID found</p>
-    //         </div>
-    //     );
-    // }
+    if (!taskData?.job_id) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+                <p className="text-red-500">No job ID found</p>
+            </div>
+        );
+    }
 
     return ( 
         <div className="min-h-screen flex bg-[#0a0a0a] relative">
