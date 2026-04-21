@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -76,6 +77,11 @@ def _build_cloud_run_client() -> run_v2.JobsClient:
     return run_v2.JobsClient()
 
 
+def _run_cloud_run_job(client: run_v2.JobsClient, request: run_v2.RunJobRequest) -> None:
+    operation = client.run_job(request=request)
+    operation.result()
+
+
 async def _schedule_cloud_run_job(job_payload: dict) -> None:
     client = _build_cloud_run_client()
     job_name = f"projects/{GCP_PROJECT_ID}/locations/{GCP_REGION}/jobs/{CLOUD_RUN_JOB}"
@@ -100,8 +106,7 @@ async def _schedule_cloud_run_job(job_payload: dict) -> None:
         )
     )
 
-    operation = client.run_job(request=request)
-    operation.result()
+    await asyncio.to_thread(_run_cloud_run_job, client, request)
 
 
 async def _enqueue_local_job(job_payload: dict) -> None:
@@ -128,6 +133,9 @@ async def schedule_agent_job(payload:RunAgentRequest):
             "current_step": "Failed to start job",
             "error": str(exc),
         })
+        current_status = get_job_status(job_id)
+        if current_status:
+            await redisservices.set_job_status(job_id, current_status.model_dump(mode="json"))
         raise
 
     return job_id

@@ -166,7 +166,7 @@ Use this if job execution should happen in Google Cloud:
 - Set `CLOUD_RUN_JOB`
 - Set `GOOGLE_CLOUD_KEY_JSON` if the host does not already have working Google Cloud credentials
 
-In this mode, the backend triggers the configured Cloud Run Job instead of enqueueing work for the local Docker worker.
+In this mode, the backend triggers the configured Cloud Run Job instead of enqueuing work for the local Docker worker.
 
 ### 4. DNS and GitHub configuration
 

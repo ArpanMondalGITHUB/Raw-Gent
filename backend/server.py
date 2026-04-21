@@ -24,6 +24,11 @@ app.include_router(webhook.router)
 app.include_router(add_repo_route.router)
 app.include_router(agent_runner_routes.router)
 
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,

@@ -60,7 +60,7 @@ FRONTEND_URL = _clean_env("FRONTEND_URL")
 # Backend URL
 BACKEND_URL = _clean_env("BACKEND_URL")
 REDIS_URL = _clean_env("REDIS_URL") or "redis://localhost:6379/0"
-REDIS_SSL_VERIFY = _get_bool_env("REDIS_SSL_VERIFY", False)
+REDIS_SSL_VERIFY = _get_bool_env("REDIS_SSL_VERIFY", REDIS_URL.startswith("rediss://"))
 
 # HTTP / CORS
 CORS_ORIGINS = _get_csv_env("CORS_ORIGINS")
@@ -77,4 +77,3 @@ COOKIE_SECURE = _get_bool_env(
 COOKIE_SAMESITE = (_clean_env("COOKIE_SAMESITE") or "lax").lower()
 COOKIE_ACCESS_NAME = _clean_env("COOKIE_ACCESS_NAME") or "access_token"
 COOKIE_INSTALLATION_NAME = _clean_env("COOKIE_INSTALLATION_NAME") or "installation_id"
-

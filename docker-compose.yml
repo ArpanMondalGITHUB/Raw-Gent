@@ -16,6 +16,8 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
 
   backend:
     build:
@@ -80,4 +82,7 @@ services:
     depends_on:
       - backend
     expose:
-      - "80"
+      - "8080"
+
+volumes:
+  redis-data:

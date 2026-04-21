@@ -58,37 +58,31 @@ def log_cloud_text(message: str, severity: str = "INFO"):
 
 def _looks_like_edit_request(prompt: str) -> bool:
     normalized = prompt.lower()
-    keywords = (
-        "write",
-        "create",
-        "add",
-        "update",
-        "modify",
-        "edit",
-        "implement",
-        "fix",
-        "refactor",
-        "test",
+    edit_target_pattern = (
+        r"(?:file|files|class|classes|function|functions|module|modules|method|methods|"
+        r"component|components|route|routes|endpoint|endpoints|handler|handlers|"
+        r"test|tests|test case|test cases|suite|line|lines|snippet|snippets|config|dockerfile|workflow)"
     )
-    return any(keyword in normalized for keyword in keywords)
+    explicit_command_patterns = (
+        rf"\b(?:create|add|update|modify|edit|delete|remove|rename|refactor|write|implement|fix)\s+"
+        rf"(?:a\s+|an\s+|the\s+)?(?:new\s+)?{edit_target_pattern}\b",
+        r"\b(?:create|add|write|update|modify|edit)\s+(?:a\s+|an\s+|the\s+)?test(?: case| suite| file)?\b",
+        r"\b(?:create file|add file|update file|modify file|write file|edit function|modify function|add test)\b",
+        r"\b(?:create|add|update|modify|edit|delete|remove|rename|refactor|write|fix)\s+[`'\"]?[\w./-]+\.(?:py|ts|tsx|js|jsx|json|md|yml|yaml|css|html|sh)[`'\"]?\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in explicit_command_patterns)
 
 
 def _claims_file_changes(response_text: str) -> bool:
     normalized = response_text.lower()
     patterns = (
-        "created",
-        "added",
-        "updated",
-        "modified",
-        "wrote",
-        "saved",
-        "test file",
-        ".py",
-        ".ts",
-        ".tsx",
-        ".js",
+        r"\b(?:created|added|updated|modified|edited|deleted|removed|saved|wrote)\s+"
+        r"(?:the\s+)?(?:file|files|function|functions|module|modules|class|classes|test|tests|component|components)\b",
+        r"\b(?:created|added|updated|modified|edited|deleted|removed|saved|wrote)\s+"
+        r"[`'\"]?[\w./-]+\.(?:py|ts|tsx|js|jsx|json|md|yml|yaml|css|html|sh)[`'\"]?\b",
+        r"\b(?:created file|added file|updated file|modified file|saved file|created test|added test)\b",
     )
-    return any(pattern in normalized for pattern in patterns)
+    return any(re.search(pattern, normalized) for pattern in patterns)
 
 
 def _append_unverified_change_warning(
@@ -133,11 +127,10 @@ async def init_redis():
     global redis_client
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
     redis_ssl_verify = _get_bool_env("REDIS_SSL_VERIFY", False)
-    logging.info(f"redis_url:{redis_url}")
     try:
         # ✅ Handle SSL (rediss://) URLs properly
         if redis_url.startswith("rediss://"):
-            redis_client = await redis.from_url(
+            redis_client = redis.from_url(
                 redis_url,
                 encoding="utf-8",
                 decode_responses=True,
@@ -145,7 +138,7 @@ async def init_redis():
                 ssl_check_hostname=redis_ssl_verify
             )
         else:
-            redis_client = await redis.from_url(
+            redis_client = redis.from_url(
                 redis_url,
                 encoding="utf-8",
                 decode_responses=True
@@ -192,15 +185,16 @@ async def send_job_update(job_id: str, update: JobUpdate) -> None:
     """Send update via Redis pub/sub only (no HTTP)"""
     try:
         channel = f"job:{job_id}:updates"
-        update_payload = update.model_dump(mode="json", exclude_none=True)
+        update_payload = update.model_dump(mode="json", exclude_none=False)
         existing_status_raw = await redis_client.get(f"job:{job_id}:status")
         existing_status = json.loads(existing_status_raw) if existing_status_raw else {}
         merged_status = {
             **existing_status,
             **update_payload,
             "job_id": existing_status.get("job_id", job_id),
-            "updated_at": datetime.now().isoformat(),
         }
+        merged_status = {key: value for key, value in merged_status.items() if value is not None}
+        merged_status["updated_at"] = datetime.now().isoformat()
         
         # Convert update to dict
         message = {
@@ -370,8 +364,7 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
                             ),
                         ))
     
-    # ✅ Run polling in background
-    polling_task = asyncio.create_task(poll_and_respond())
+    polling_task: asyncio.Task | None = None
 
     try:
         # ✅ Process initial agent response
@@ -433,6 +426,9 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
         msg = "✅ Agent initial workflow finished, now listening for follow-ups..."
         logging.info(msg)
         log_cloud_text(msg, severity='INFO')
+
+        # Start polling only after the initial runner invocation completes.
+        polling_task = asyncio.create_task(poll_and_respond())
         
         # ✅ Wait for polling task or timeout
         try:
@@ -440,11 +436,12 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
         except asyncio.TimeoutError:
             logging.info("⏱️ Polling timeout reached ")
     finally:
-        polling_task.cancel()
-        try:
-            await polling_task
-        except asyncio.CancelledError:
-            pass
+        if polling_task is not None:
+            polling_task.cancel()
+            try:
+                await polling_task
+            except asyncio.CancelledError:
+                pass
 
 
 async def collect_file_changes(temp_dir: str) -> List[FileChange]:
@@ -461,12 +458,14 @@ async def collect_file_changes(temp_dir: str) -> List[FileChange]:
     
     try:
         # Use porcelain status so untracked new files also appear in the UI.
-        result = subprocess.run(
+        result = await asyncio.to_thread(
+            subprocess.run,
             ["git", "status", "--porcelain"],
             cwd=temp_dir,
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
+            check=False
         )
         
         for line in result.stdout.strip().split('\n'):
@@ -497,12 +496,14 @@ async def collect_file_changes(temp_dir: str) -> List[FileChange]:
             if change_type == 'deleted':
                 # For deleted files, get content from git
                 try:
-                    git_result = subprocess.run(
+                    git_result = await asyncio.to_thread(
+                        subprocess.run,
                         ["git", "show", f"HEAD:{file_path}"],
                         cwd=temp_dir,
                         capture_output=True,
                         text=True,
-                        timeout=10
+                        timeout=10,
+                        check=False,
                     )
                     original_content = git_result.stdout
                 except:
@@ -516,12 +517,14 @@ async def collect_file_changes(temp_dir: str) -> List[FileChange]:
                 # Get original content for modified files
                 if change_type == 'modified':
                     try:
-                        git_result = subprocess.run(
+                        git_result = await asyncio.to_thread(
+                            subprocess.run,
                             ["git", "show", f"HEAD:{file_path}"],
                             cwd=temp_dir,
                             capture_output=True,
                             text=True,
-                            timeout=10
+                            timeout=10,
+                            check=False,
                         )
                         original_content = git_result.stdout
                     except:

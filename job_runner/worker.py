@@ -3,7 +3,6 @@ from datetime import datetime
 import json
 import logging
 import os
-import subprocess
 import sys
 from typing import Any
 
@@ -48,7 +47,7 @@ async def create_redis_client() -> redis.Redis:
         options["ssl_cert_reqs"] = ssl.CERT_REQUIRED if redis_ssl_verify else ssl.CERT_NONE
         options["ssl_check_hostname"] = redis_ssl_verify
 
-    client = await redis.from_url(redis_url, **options)
+    client = redis.from_url(redis_url, **options)
     await client.ping()
     return client
 
@@ -89,6 +88,7 @@ async def publish_failed_status(redis_client: redis.Redis, job_id: str, error: s
 
 async def run_job(redis_client: redis.Redis, job: dict):
     job_id = job["job_id"]
+    timeout_seconds = int(os.getenv("JOB_RUNNER_TIMEOUT", "3600"))
     env = os.environ.copy()
     env.update(
         {
@@ -102,16 +102,36 @@ async def run_job(redis_client: redis.Redis, job: dict):
     )
 
     logger.info(f"Starting local worker job {job_id}")
-    result = subprocess.run(
-        [sys.executable, "main.py"],
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "main.py",
         cwd=os.path.dirname(__file__),
         env=env,
-        capture_output=True,
-        text=True,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
 
-    if result.returncode != 0:
-        error = result.stderr.strip() or result.stdout.strip() or "job_runner main.py exited with a non-zero code"
+    try:
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
+    except asyncio.TimeoutError:
+        process.kill()
+        stdout_bytes, stderr_bytes = await process.communicate()
+        stdout = stdout_bytes.decode("utf-8", errors="replace").strip()
+        stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
+        error = stderr or stdout or f"job_runner main.py timed out after {timeout_seconds} seconds"
+        logger.error(f"Job {job_id} failed: {error}")
+        await publish_failed_status(redis_client, job_id, error)
+        return
+    except asyncio.CancelledError:
+        process.kill()
+        await process.communicate()
+        raise
+
+    stdout = stdout_bytes.decode("utf-8", errors="replace")
+    stderr = stderr_bytes.decode("utf-8", errors="replace")
+
+    if process.returncode != 0:
+        error = stderr.strip() or stdout.strip() or "job_runner main.py exited with a non-zero code"
         logger.error(f"Job {job_id} failed: {error}")
         await publish_failed_status(redis_client, job_id, error)
         return

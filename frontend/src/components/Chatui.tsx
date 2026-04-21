@@ -104,6 +104,11 @@ export function Chatui({ jobStatus, messages, onSendMessage, isConnected }: Chat
     return messages[messages.length - 1].content;
   }, [messages]);
 
+  const lastMessageTimestamp = useMemo(() => {
+    if (messages.length === 0) return null;
+    return messages[messages.length - 1].timestamp;
+  }, [messages]);
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -112,7 +117,7 @@ export function Chatui({ jobStatus, messages, onSendMessage, isConnected }: Chat
 
   const send = () => {
     const trimmed = draft.trim();
-    if (!trimmed) return;
+    if (!trimmed || !isConnected) return;
     onSendMessage(trimmed);
     setDraft("");
   };
@@ -152,7 +157,11 @@ export function Chatui({ jobStatus, messages, onSendMessage, isConnected }: Chat
               <div className="rounded-xl border border-gray-700 bg-[#1e1b22] p-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-white">Latest Message</h3>
-                  <span className="text-xs text-gray-400">{new Date().toLocaleTimeString()}</span>
+                  <span className="text-xs text-gray-400">
+                    {lastMessageTimestamp
+                      ? new Date(lastMessageTimestamp).toLocaleTimeString()
+                      : "--:--:--"}
+                  </span>
                 </div>
                 <p className="mt-2 text-sm text-gray-200">{lastMessage}</p>
               </div>

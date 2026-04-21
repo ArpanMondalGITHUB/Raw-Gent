@@ -10,7 +10,7 @@ Fix result:
 {bug_fix_result}
 
 The repository is already cloned and available through tools.
-Inspect the relevant files directly and review the bug analysis, fix, and validation work.
+Inspect the relevant files directly and review the bug analysis and fix result.
 Do not ask the user to paste code or provide a repository link.
 
 Task:

@@ -20,18 +20,26 @@ const originToWebSocketOrigin = (origin: string) =>
 
 const browserOrigin = getBrowserOrigin();
 
+const getOrigin = (value: string) => {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value;
+  }
+};
+
 export const API_BASE_URL =
   normalizeEnvValue(import.meta.env.VITE_API_URL) || browserOrigin;
 
-const publicApiOrigin = API_BASE_URL || browserOrigin;
+const siteOrigin = API_BASE_URL ? getOrigin(API_BASE_URL) : browserOrigin;
 
 export const LOGIN_URL =
   normalizeEnvValue(import.meta.env.VITE_LOGIN_URL) ||
-  `${publicApiOrigin}/login`;
+  `${siteOrigin}/login`;
 
 export const WS_BASE_URL =
   normalizeEnvValue(import.meta.env.VITE_WS_URL) ||
-  originToWebSocketOrigin(publicApiOrigin);
+  originToWebSocketOrigin(siteOrigin);
 
 export const GITHUB_APP_INSTALL_URL =
   normalizeEnvValue(import.meta.env.VITE_GITHUB_APP_INSTALL_URL) ||

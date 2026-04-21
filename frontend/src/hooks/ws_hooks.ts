@@ -16,7 +16,8 @@ export function useWebsocket(job_id: string | null) {
   const [jobStatus, setJobStatus] = useState<JobStatusResponse | null>(null);
   const connect = useCallback(() => {
     if (!job_id) return;
-    const ws = new WebSocket(`${WS_BASE_URL}/ws/status/${job_id}`);
+    const encodedJobId = encodeURIComponent(job_id);
+    const ws = new WebSocket(`${WS_BASE_URL}/ws/status/${encodedJobId}`);
 
     wsRef.current = ws;
 

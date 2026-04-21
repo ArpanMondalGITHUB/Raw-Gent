@@ -45,6 +45,13 @@ async def websocket_handler(websocket:WebSocket,job_id:str):
     try:
         # send initial status 
         status = get_job_status(job_id=job_id)
+        # If the in-memory cache is empty (e.g. after a restart), fall back to Redis
+        if not status:
+            stored_status = await redisservices.get_job_status(job_id=job_id)
+            if stored_status:
+                update_job_status(job_id, stored_status)
+                status = get_job_status(job_id=job_id)
+
         if status:
             await websocket.send_json({
                 "type":"status_update",
@@ -79,7 +86,8 @@ async def websocket_handler(websocket:WebSocket,job_id:str):
                         logger.warning(f"Invalid websocket payload for job {job_id}: {e}")
                     except Exception as e:
                         logger.error(f"Error handling websocket message for job {job_id}: {e}")
-
+                        break
+                    
             except WebSocketDisconnect:
               logger.info(f"WebSocket disconnected for job {job_id}")
               logging.info(f"WebSocket disconnected for job {job_id}")

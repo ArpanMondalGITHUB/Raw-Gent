@@ -28,7 +28,8 @@ class RedisServices:
             redis_options["ssl_cert_reqs"] = ssl.CERT_REQUIRED if REDIS_SSL_VERIFY else ssl.CERT_NONE
             redis_options["ssl_check_hostname"] = REDIS_SSL_VERIFY
 
-        self.redis = await redis.from_url(REDIS_URL, **redis_options)
+        self.redis = redis.from_url(REDIS_URL, **redis_options)
+        await self.redis.ping()
         logger.info("✅ Connected to Redis")
         logging.info("✅ Connected to Redis")
 

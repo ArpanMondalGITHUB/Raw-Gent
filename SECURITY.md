@@ -16,11 +16,14 @@ Please do not report security vulnerabilities in public GitHub issues.
 Use one of these private channels instead:
 
 1. GitHub private vulnerability reporting, if it is enabled for this repository.
-2. Email the maintainer at `arpanmondal572@gmail.com` with the subject line `Raw-Gent security report`.
+2. Email the preferred shared inbox at `security@yourdomain.com`.
+3. Optionally copy a secondary security alias such as `sec-ops@yourdomain.com`.
+4. If the shared aliases are unavailable, use the maintainer fallback at `arpanmondal572@gmail.com`.
 
 Please include:
 
 - a clear description of the issue
+- a subject line like `Raw-Gent security report | affects: <component>`
 - affected files, routes, or components
 - steps to reproduce the problem
 - proof of concept, logs, or screenshots when helpful

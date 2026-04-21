@@ -2,9 +2,12 @@
 File operation tools for ADK agents.
 These tools allow agents to read, write, and list files in the cloned repository.
 """
+import logging
 import os
 from typing import Any
 from google.adk.tools import ToolContext
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_repo_path(context: Any = None) -> str | None:
@@ -18,8 +21,8 @@ def _resolve_repo_path(context: Any = None) -> str | None:
                 repo_path = state.get("repo_path")
                 if repo_path:
                     return str(repo_path)
-        except Exception:
-            pass
+        except (AttributeError, TypeError, KeyError) as exc:
+            logger.debug("Unable to resolve repo_path from invocation_context/session/state: %s", exc, exc_info=True)
 
         try:
             session = getattr(context, "session", None)
@@ -28,8 +31,8 @@ def _resolve_repo_path(context: Any = None) -> str | None:
                 repo_path = state.get("repo_path")
                 if repo_path:
                     return str(repo_path)
-        except Exception:
-            pass
+        except (AttributeError, TypeError, KeyError) as exc:
+            logger.debug("Unable to resolve repo_path from context.session/state: %s", exc, exc_info=True)
 
         try:
             state = context.get("state") if isinstance(context, dict) else None
@@ -37,8 +40,8 @@ def _resolve_repo_path(context: Any = None) -> str | None:
                 repo_path = state.get("repo_path")
                 if repo_path:
                     return str(repo_path)
-        except Exception:
-            pass
+        except (AttributeError, TypeError, KeyError) as exc:
+            logger.debug("Unable to resolve repo_path from context['state']: %s", exc, exc_info=True)
 
     repo_path = os.getenv("REPO_PATH")
     return repo_path.strip() if repo_path and repo_path.strip() else None
@@ -49,8 +52,8 @@ def _resolve_full_path(relative_path: str, context: Any = None) -> tuple[str | N
     if not repo_path:
         return None, "Error: Repository path not available. Check ADK session state or REPO_PATH."
 
-    repo_path_abs = os.path.abspath(repo_path)
-    full_path = os.path.abspath(os.path.join(repo_path_abs, relative_path))
+    repo_path_abs = os.path.normcase(os.path.realpath(repo_path))
+    full_path = os.path.normcase(os.path.realpath(os.path.join(repo_path_abs, relative_path)))
 
     try:
         if os.path.commonpath([repo_path_abs, full_path]) != repo_path_abs:
