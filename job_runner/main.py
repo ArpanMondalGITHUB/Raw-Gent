@@ -126,7 +126,7 @@ async def init_redis():
     """Initialize Redis connection with SSL support"""
     global redis_client
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    redis_ssl_verify = _get_bool_env("REDIS_SSL_VERIFY", False)
+    redis_ssl_verify = _get_bool_env("REDIS_SSL_VERIFY", redis_url.startswith("rediss://"))
     try:
         # ✅ Handle SSL (rediss://) URLs properly
         if redis_url.startswith("rediss://"):
@@ -506,7 +506,7 @@ async def collect_file_changes(temp_dir: str) -> List[FileChange]:
                         check=False,
                     )
                     original_content = git_result.stdout
-                except:
+                except Exception:
                     original_content = ""
             else:
                 # For created/modified files
@@ -527,7 +527,7 @@ async def collect_file_changes(temp_dir: str) -> List[FileChange]:
                             check=False,
                         )
                         original_content = git_result.stdout
-                    except:
+                    except Exception:
                         original_content = None
             
             # Detect language

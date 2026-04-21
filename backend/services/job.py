@@ -143,7 +143,10 @@ async def schedule_agent_job(payload:RunAgentRequest):
 def update_job_status(job_id: str, update: Dict[Any, Any]) -> bool:
     if job_id not in job_results:
         if "created_at" in update:
-            job_results[job_id] = JobStatusResponse(**update)
+            try:
+                job_results[job_id] = JobStatusResponse(**update)
+            except Exception:
+                return False
             return True
         return False  # Job doesn't exist
     

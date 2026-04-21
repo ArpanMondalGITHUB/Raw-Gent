@@ -36,7 +36,7 @@ def _get_queue_name() -> str:
 
 async def create_redis_client() -> redis.Redis:
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    redis_ssl_verify = _get_bool_env("REDIS_SSL_VERIFY", False)
+    redis_ssl_verify = _get_bool_env("REDIS_SSL_VERIFY", redis_url.startswith("rediss://"))
 
     options: dict[str, Any] = {
         "encoding": "utf-8",

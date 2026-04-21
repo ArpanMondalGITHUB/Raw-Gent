@@ -22,9 +22,9 @@ const browserOrigin = getBrowserOrigin();
 
 const getOrigin = (value: string) => {
   try {
-    return new URL(value).origin;
+    return new URL(value, browserOrigin || undefined).origin;
   } catch {
-    return value;
+    return value.startsWith("/") ? browserOrigin : value;
   }
 };
 
