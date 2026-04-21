@@ -9,7 +9,6 @@ async def get_github_access_token(code: str):
         "client_secret": GITHUB_CLIENT_SECRET,
         "code": code
     }
-    print(f"payload:{payload}")
     headers = {"Accept": "application/json"}
 
     async with httpx.AsyncClient() as client:

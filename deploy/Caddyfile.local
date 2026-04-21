@@ -1,0 +1,8 @@
+:80 {
+    encode zstd gzip
+
+    @backend path /agent/* /auth/* /branches/* /callback* /installation-repos* /internal/* /login /redirect-home* /set-cookie* /welcome* /webhook /ws/*
+    reverse_proxy @backend backend:8000
+
+    reverse_proxy frontend:8080
+}

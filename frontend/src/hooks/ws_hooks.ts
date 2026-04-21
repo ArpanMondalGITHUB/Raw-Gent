@@ -7,6 +7,7 @@ import {
   WebScoketMessageResponseSchema,
 } from "../schemas/run_agent.schemas";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WS_BASE_URL } from "../config/runtime";
 
 export function useWebsocket(job_id: string | null) {
   const wsRef = useRef<WebSocket | null>(null);
@@ -15,10 +16,8 @@ export function useWebsocket(job_id: string | null) {
   const [jobStatus, setJobStatus] = useState<JobStatusResponse | null>(null);
   const connect = useCallback(() => {
     if (!job_id) return;
-
-    const wsURL = import.meta.env.VITE_WS_URL;
-
-    const ws = new WebSocket(`${wsURL}/ws/status/${job_id}`);
+    const encodedJobId = encodeURIComponent(job_id);
+    const ws = new WebSocket(`${WS_BASE_URL}/ws/status/${encodedJobId}`);
 
     wsRef.current = ws;
 

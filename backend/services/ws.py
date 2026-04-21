@@ -80,7 +80,7 @@ class JobConnectionManager:
            async with self._lock:
               # Remove from active connections
               if job_id in self.active_connections:
-                 if websocket in self.active_connections:
+                 if websocket in self.active_connections[job_id]:
                     self.active_connections[job_id].remove(websocket)
             # Remove job entry if no more connections
                  if not self.active_connections[job_id]:

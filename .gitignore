@@ -15,7 +15,6 @@ venv/
 .vscode/
 
 # Python tooling
-poetry.lock
 *.egg-info/
 dist/
 build/
@@ -32,6 +31,10 @@ Thumbs.db
 # Secrets
 .env
 .env.*
+!.env.docker.example
+!.env.production.example
+!.env.example
+!backend/.env.example
 
 # Pytest and coverage
 .pytest_cache/

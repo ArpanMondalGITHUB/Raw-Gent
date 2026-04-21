@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Raw-Gent run workspace preview</title>
+  <desc id="desc">A dark interface preview showing repository selection, branch selection, a prompt composer, and agent launch controls.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#07111f"/>
+      <stop offset="55%" stop-color="#11172a"/>
+      <stop offset="100%" stop-color="#1f1140"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3fd7ff" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#131b2f"/>
+      <stop offset="100%" stop-color="#0d1323"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#020617" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <circle cx="1270" cy="160" r="180" fill="#38bdf8" opacity="0.10"/>
+  <circle cx="310" cy="700" r="240" fill="#a855f7" opacity="0.12"/>
+  <circle cx="1420" cy="720" r="120" fill="#22d3ee" opacity="0.10"/>
+
+  <rect x="64" y="54" width="1472" height="792" rx="34" fill="#0b1020" stroke="#243249" filter="url(#shadow)"/>
+  <rect x="64" y="54" width="1472" height="72" rx="34" fill="#10192d"/>
+  <rect x="64" y="112" width="1472" height="2" fill="#1c2940"/>
+
+  <circle cx="112" cy="90" r="8" fill="#f87171"/>
+  <circle cx="138" cy="90" r="8" fill="#fbbf24"/>
+  <circle cx="164" cy="90" r="8" fill="#4ade80"/>
+
+  <text x="212" y="97" fill="#e2e8f0" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700">Raw-Gent</text>
+  <text x="1330" y="97" fill="#93c5fd" font-family="Arial, Helvetica, sans-serif" font-size="18">GitHub + Async Agent Workspace</text>
+
+  <rect x="98" y="164" width="292" height="618" rx="24" fill="#0f1728" stroke="#1f2c45"/>
+  <rect x="122" y="192" width="244" height="72" rx="18" fill="url(#glow)" opacity="0.22"/>
+  <text x="148" y="228" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700">Raw-Gent AI</text>
+  <text x="148" y="254" fill="#cbd5e1" font-family="Arial, Helvetica, sans-serif" font-size="16">Queue coding work and watch it stream back.</text>
+
+  <rect x="122" y="304" width="244" height="64" rx="18" fill="#111b31"/>
+  <text x="148" y="330" fill="#7dd3fc" font-family="Arial, Helvetica, sans-serif" font-size="14" letter-spacing="1.2">ACTIVE FLOW</text>
+  <text x="148" y="354" fill="#e2e8f0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Bug fix and test run</text>
+
+  <rect x="122" y="392" width="244" height="132" rx="18" fill="#111b31"/>
+  <text x="148" y="424" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">What happens next</text>
+  <text x="148" y="452" fill="#cbd5e1" font-family="Arial, Helvetica, sans-serif" font-size="15">1. OAuth login</text>
+  <text x="148" y="478" fill="#cbd5e1" font-family="Arial, Helvetica, sans-serif" font-size="15">2. Install GitHub App</text>
+  <text x="148" y="504" fill="#cbd5e1" font-family="Arial, Helvetica, sans-serif" font-size="15">3. Queue job via Redis</text>
+
+  <rect x="122" y="548" width="244" height="206" rx="18" fill="#101826" stroke="#1f2c45"/>
+  <text x="148" y="584" fill="#e2e8f0" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Focus areas</text>
+  <rect x="148" y="610" width="194" height="34" rx="17" fill="#13253f"/>
+  <text x="170" y="632" fill="#bfdbfe" font-family="Arial, Helvetica, sans-serif" font-size="14">Bug fixing</text>
+  <rect x="148" y="654" width="194" height="34" rx="17" fill="#1d183c"/>
+  <text x="170" y="676" fill="#ddd6fe" font-family="Arial, Helvetica, sans-serif" font-size="14">Small features</text>
+  <rect x="148" y="698" width="194" height="34" rx="17" fill="#102f37"/>
+  <text x="170" y="720" fill="#a5f3fc" font-family="Arial, Helvetica, sans-serif" font-size="14">Tests and review</text>
+
+  <text x="452" y="214" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700">Queue work for a GitHub repository</text>
+  <text x="452" y="252" fill="#94a3b8" font-family="Arial, Helvetica, sans-serif" font-size="22">Pick an installed repository, choose a branch, describe the task, then hand it to the async worker.</text>
+
+  <rect x="452" y="292" width="1048" height="358" rx="28" fill="url(#card)" stroke="#243249"/>
+  <text x="488" y="334" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Launch panel</text>
+  <text x="488" y="362" fill="#94a3b8" font-family="Arial, Helvetica, sans-serif" font-size="17">The browser stores the GitHub installation ID, the backend mints an installation token, and the job is queued for execution.</text>
+
+  <text x="488" y="418" fill="#7dd3fc" font-family="Arial, Helvetica, sans-serif" font-size="14" letter-spacing="1.2">REPOSITORY</text>
+  <rect x="488" y="434" width="430" height="64" rx="18" fill="#0f1728" stroke="#2c3a54"/>
+  <circle cx="524" cy="466" r="8" fill="#4ade80"/>
+  <text x="544" y="472" fill="#e2e8f0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">octo-org/raw-gent-demo</text>
+  <text x="544" y="496" fill="#94a3b8" font-family="Arial, Helvetica, sans-serif" font-size="15">Installed via GitHub App</text>
+
+  <text x="952" y="418" fill="#c4b5fd" font-family="Arial, Helvetica, sans-serif" font-size="14" letter-spacing="1.2">BRANCH</text>
+  <rect x="952" y="434" width="216" height="64" rx="18" fill="#0f1728" stroke="#2c3a54"/>
+  <text x="988" y="472" fill="#e2e8f0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">main</text>
+  <text x="988" y="496" fill="#94a3b8" font-family="Arial, Helvetica, sans-serif" font-size="15">default branch</text>
+
+  <text x="1202" y="418" fill="#67e8f9" font-family="Arial, Helvetica, sans-serif" font-size="14" letter-spacing="1.2">MODE</text>
+  <rect x="1202" y="434" width="264" height="64" rx="18" fill="#0f1728" stroke="#2c3a54"/>
+  <text x="1238" y="472" fill="#e2e8f0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">local worker</text>
+  <text x="1238" y="496" fill="#94a3b8" font-family="Arial, Helvetica, sans-serif" font-size="15">Redis queue + Python runner</text>
+
+  <text x="488" y="548" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Prompt</text>
+  <rect x="488" y="570" width="978" height="152" rx="22" fill="#091220" stroke="#2c3a54"/>
+  <text x="520" y="620" fill="#dbeafe" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Help me fix the websocket reconnect bug and add tests for Redis-backed status updates.</text>
+  <text x="520" y="658" fill="#94a3b8" font-family="Arial, Helvetica, sans-serif" font-size="18">The current flow should keep the chat connected, preserve queued messages, and show clean diffs in the task view.</text>
+  <rect x="1270" y="734" width="196" height="56" rx="28" fill="url(#glow)"/>
+  <text x="1322" y="770" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700">Give me a plan</text>
+
+  <rect x="452" y="682" width="310" height="100" rx="22" fill="#0f1728" stroke="#233048"/>
+  <text x="484" y="720" fill="#7dd3fc" font-family="Arial, Helvetica, sans-serif" font-size="14" letter-spacing="1.2">STATUS</text>
+  <text x="484" y="752" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Ready to queue</text>
+  <text x="484" y="776" fill="#94a3b8" font-family="Arial, Helvetica, sans-serif" font-size="15">No active job for this branch yet.</text>
+
+  <rect x="786" y="682" width="336" height="100" rx="22" fill="#0f1728" stroke="#233048"/>
+  <text x="818" y="720" fill="#c4b5fd" font-family="Arial, Helvetica, sans-serif" font-size="14" letter-spacing="1.2">WORKFLOWS</text>
+  <text x="818" y="752" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Bug fix, feature, review, tests</text>
+  <text x="818" y="776" fill="#94a3b8" font-family="Arial, Helvetica, sans-serif" font-size="15">The root agent routes to the best specialist flow.</text>
+
+  <rect x="1146" y="682" width="354" height="100" rx="22" fill="#0f1728" stroke="#233048"/>
+  <text x="1178" y="720" fill="#67e8f9" font-family="Arial, Helvetica, sans-serif" font-size="14" letter-spacing="1.2">OUTPUT</text>
+  <text x="1178" y="752" fill="#f8fafc" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Messages, status, and diffs</text>
+  <text x="1178" y="776" fill="#94a3b8" font-family="Arial, Helvetica, sans-serif" font-size="15">Updates stream back over WebSockets.</text>
+</svg>

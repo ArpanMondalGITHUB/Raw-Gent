@@ -1,5 +1,6 @@
+import { LOGIN_URL } from "../config/runtime";
+
 export const loginWithGitHub = () => {
-  // Redirect to backend OAuth login
-  window.location.href = "https://raw-gent.onrender.com/login";
+  window.location.href = LOGIN_URL;
 };
 

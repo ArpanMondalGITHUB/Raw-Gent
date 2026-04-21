@@ -1,13 +1,12 @@
 from datetime import datetime
 import json
 import os
+import re
 import subprocess
 import tempfile
 from typing import List
-import httpx
 from Raw_Gent.main_agent import root_agent
 import logging
-import google.cloud.logging
 import sys
 import asyncio
 import shutil
@@ -17,19 +16,108 @@ from google.genai import types
 from job_runner_models import AgentMessage, FileChange, JobStatus, JobUpdate, RoleType
 import redis.asyncio as redis
 import ssl
+from google.auth.exceptions import DefaultCredentialsError
 
-# init cloud loging client
-client = google.cloud.logging.Client()
+try:
+    import google.cloud.logging
+except Exception:  # pragma: no cover - optional in local runs
+    google = None
 
-# route python logs to  cloud loging
-client.setup_logging()
 
-cloud_logger = client.logger('agent-job')
+def _get_bool_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_cloud_logger():
+    if google is None:
+        return None
+
+    try:
+        client = google.cloud.logging.Client()
+        client.setup_logging()
+        return client.logger("agent-job")
+    except (DefaultCredentialsError, Exception):
+        return None
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+cloud_logger = _build_cloud_logger()
+
+
+def log_cloud_text(message: str, severity: str = "INFO"):
+    if cloud_logger is not None:
+        cloud_logger.log_text(message, severity=severity)
+
+
+def _looks_like_edit_request(prompt: str) -> bool:
+    normalized = prompt.lower()
+    edit_target_pattern = (
+        r"(?:file|files|class|classes|function|functions|module|modules|method|methods|"
+        r"component|components|route|routes|endpoint|endpoints|handler|handlers|"
+        r"test|tests|test case|test cases|suite|line|lines|snippet|snippets|config|dockerfile|workflow)"
+    )
+    explicit_command_patterns = (
+        rf"\b(?:create|add|update|modify|edit|delete|remove|rename|refactor|write|implement|fix)\s+"
+        rf"(?:a\s+|an\s+|the\s+)?(?:new\s+)?{edit_target_pattern}\b",
+        r"\b(?:create|add|write|update|modify|edit)\s+(?:a\s+|an\s+|the\s+)?test(?: case| suite| file)?\b",
+        r"\b(?:create file|add file|update file|modify file|write file|edit function|modify function|add test)\b",
+        r"\b(?:create|add|update|modify|edit|delete|remove|rename|refactor|write|fix)\s+[`'\"]?[\w./-]+\.(?:py|ts|tsx|js|jsx|json|md|yml|yaml|css|html|sh)[`'\"]?\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in explicit_command_patterns)
+
+
+def _claims_file_changes(response_text: str) -> bool:
+    normalized = response_text.lower()
+    patterns = (
+        r"\b(?:created|added|updated|modified|edited|deleted|removed|saved|wrote)\s+"
+        r"(?:the\s+)?(?:file|files|function|functions|module|modules|class|classes|test|tests|component|components)\b",
+        r"\b(?:created|added|updated|modified|edited|deleted|removed|saved|wrote)\s+"
+        r"[`'\"]?[\w./-]+\.(?:py|ts|tsx|js|jsx|json|md|yml|yaml|css|html|sh)[`'\"]?\b",
+        r"\b(?:created file|added file|updated file|modified file|saved file|created test|added test)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def _append_unverified_change_warning(
+    messages: List[AgentMessage],
+    prompt: str,
+    response_text: str,
+    file_changes: List[FileChange],
+) -> List[AgentMessage]:
+    if file_changes:
+        return messages
+
+    if not (_looks_like_edit_request(prompt) or _claims_file_changes(response_text)):
+        return messages
+
+    warning = AgentMessage(
+        role=RoleType.AGENT,
+        content=(
+            "No repository file changes were actually detected for this run. "
+            "Treat any claim about creating or updating files as unverified."
+        ),
+        timestamp=datetime.now().isoformat(),
+    )
+
+    return [*messages, warning]
+
+
+def _should_fail_for_missing_changes(
+    prompt: str,
+    response_text: str,
+    file_changes: List[FileChange],
+) -> bool:
+    if file_changes:
+        return False
+
+    return _looks_like_edit_request(prompt) or _claims_file_changes(response_text)
 
 # Redis client for cloud run
 redis_client:redis.Redis = None
@@ -38,19 +126,19 @@ async def init_redis():
     """Initialize Redis connection with SSL support"""
     global redis_client
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    logging.info(f"redis_url:{redis_url}")
+    redis_ssl_verify = _get_bool_env("REDIS_SSL_VERIFY", redis_url.startswith("rediss://"))
     try:
         # ✅ Handle SSL (rediss://) URLs properly
         if redis_url.startswith("rediss://"):
-            redis_client = await redis.from_url(
+            redis_client = redis.from_url(
                 redis_url,
                 encoding="utf-8",
                 decode_responses=True,
-                ssl_cert_reqs=ssl.CERT_NONE,  # Skip SSL cert verification
-                ssl_check_hostname=False
+                ssl_cert_reqs=ssl.CERT_REQUIRED if redis_ssl_verify else ssl.CERT_NONE,
+                ssl_check_hostname=redis_ssl_verify
             )
         else:
-            redis_client = await redis.from_url(
+            redis_client = redis.from_url(
                 redis_url,
                 encoding="utf-8",
                 decode_responses=True
@@ -97,17 +185,28 @@ async def send_job_update(job_id: str, update: JobUpdate) -> None:
     """Send update via Redis pub/sub only (no HTTP)"""
     try:
         channel = f"job:{job_id}:updates"
+        update_payload = update.model_dump(mode="json", exclude_none=False)
+        existing_status_raw = await redis_client.get(f"job:{job_id}:status")
+        existing_status = json.loads(existing_status_raw) if existing_status_raw else {}
+        merged_status = {
+            **existing_status,
+            **update_payload,
+            "job_id": existing_status.get("job_id", job_id),
+        }
+        merged_status = {key: value for key, value in merged_status.items() if value is not None}
+        merged_status["updated_at"] = datetime.now().isoformat()
         
         # Convert update to dict
         message = {
             "type": "status_update",
-            "content": json.dumps(update.model_dump(exclude_none=True)),
+            "content": json.dumps(merged_status),
             "job_id": job_id,
             "timestamp": datetime.now().isoformat()
         }
         
         # Publish to Redis
         await redis_client.publish(channel, json.dumps(message))
+        await redis_client.set(f"job:{job_id}:status", json.dumps(merged_status), ex=86400)
         logging.info(f"✅ Published status update to Redis: {update.status}")
         
     except Exception as e:
@@ -123,6 +222,7 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
     USER_ID = "job_runner"
     SESSION_ID = f"{repo}_{branch}_{os.getpid()}"
     job_id = os.environ.get("JOB_ID")
+    os.environ["REPO_PATH"] = temp_dir
 
     # ✅ Load conversation history
     messages: List[AgentMessage] = []
@@ -189,7 +289,7 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
     # Run the agent
     msg = f"🎯 Starting agent execution for session: {SESSION_ID} with {len(conversation_history)} previous messages"
     logging.info(msg)
-    cloud_logger.log_text(msg, severity='INFO')
+    log_cloud_text(msg, severity='INFO')
     print(msg)
     
 
@@ -203,6 +303,17 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
                 
             if user_msg.get("type") == "user_message":
                 logging.info(f"💬 Processing user message: {user_msg.get('content')[:100]}")
+                messages.append(AgentMessage(
+                    role=RoleType.USER,
+                    content=user_msg["content"],
+                    timestamp=user_msg.get("timestamp", datetime.now().isoformat())
+                ))
+
+                await send_job_update(job_id=job_id, update=JobUpdate(
+                    status=JobStatus.RUNNING,
+                    messages=messages,
+                    current_step="Processing follow-up request..."
+                ))
                 
                 # Process user message
                 user_content = types.Content(
@@ -220,68 +331,117 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
                 async for event in agent_events:
                     if event.is_final_response():
                         response_text = event.content.parts[0].text if event.content.parts else ""
+                        messages.append(AgentMessage(
+                            role=RoleType.AGENT,
+                            content=response_text,
+                            timestamp=datetime.now().isoformat()
+                        ))
                         
                         logging.info(f"🤖 Agent response: {response_text[:100]}")
-                        
-                        # Send response via Redis
-                        await send_agent_response_to_redis(job_id, {
-                            "type": "agent_message",
-                            "content": response_text,
-                            "job_id": job_id,
-                            "timestamp": datetime.now().isoformat()
-                        })
-    
-    # ✅ Run polling in background
-    polling_task = asyncio.create_task(poll_and_respond())
 
-    # ✅ Process initial agent response
-    events = runner.run_async(
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        new_message=content
-    )
+                        file_changes: List[FileChange] = await collect_file_changes(temp_dir)
+                        messages_with_verification = _append_unverified_change_warning(
+                            messages,
+                            user_msg["content"],
+                            response_text,
+                            file_changes,
+                        )
+                        should_fail = _should_fail_for_missing_changes(
+                            user_msg["content"],
+                            response_text,
+                            file_changes,
+                        )
+                        await send_job_update(job_id=job_id, update=JobUpdate(
+                            status=JobStatus.FAILED if should_fail else JobStatus.COMPLETED,
+                            messages=messages_with_verification,
+                            file_changes=file_changes,
+                            current_step="No verified file changes were produced." if should_fail else "Done!",
+                            error=(
+                                "The run was expected to create or update repository files, "
+                                "but no verified file changes were detected."
+                                if should_fail
+                                else None
+                            ),
+                        ))
     
-    # Process events
-    async for event in events:
-        if event.is_final_response():
-            response_text = event.content.parts[0].text if event.content.parts else ""
-            messages.append(AgentMessage(
-                role=RoleType.AGENT,
-                content=response_text,
-                timestamp=datetime.now().isoformat()
-            ))
+    polling_task: asyncio.Task | None = None
 
-            await send_job_update(job_id=job_id, update=JobUpdate(
-                status=JobStatus.RUNNING,
-                messages=messages,
-                current_step="Processing..."
-            ))
-            
-            msg = f"📝 Agent initial response: {response_text}"
-            logging.info(msg)
-            cloud_logger.log_text(msg, severity='INFO')
-    
-    # ✅ Collect file changes
-    file_changes: List[FileChange] = await collect_file_changes(temp_dir)
-
-    # ✅ Send completion update
-    await send_job_update(job_id=job_id, update=JobUpdate(
-        status=JobStatus.COMPLETED,
-        messages=messages,
-        file_changes=file_changes,
-        current_step="Done!"
-    ))
-    
-    msg = "✅ Agent initial workflow finished, now listening for follow-ups..."
-    logging.info(msg)
-    cloud_logger.log_text(msg, severity='INFO')
-    
-    # ✅ Wait for polling task or timeout
     try:
-        await asyncio.wait_for(polling_task, timeout=600)  # 10 minutes
-    except asyncio.TimeoutError:
-        logging.info("⏱️ Polling timeout reached ")
-        polling_task.cancel()
+        # ✅ Process initial agent response
+        events = runner.run_async(
+            user_id=USER_ID,
+            session_id=SESSION_ID,
+            new_message=content
+        )
+        
+        # Process events
+        async for event in events:
+            if event.is_final_response():
+                response_text = event.content.parts[0].text if event.content.parts else ""
+                messages.append(AgentMessage(
+                    role=RoleType.AGENT,
+                    content=response_text,
+                    timestamp=datetime.now().isoformat()
+                ))
+
+                await send_job_update(job_id=job_id, update=JobUpdate(
+                    status=JobStatus.RUNNING,
+                    messages=messages,
+                    current_step="Processing..."
+                ))
+                
+                msg = f"📝 Agent initial response: {response_text}"
+                logging.info(msg)
+                log_cloud_text(msg, severity='INFO')
+        
+        # ✅ Collect file changes
+        file_changes: List[FileChange] = await collect_file_changes(temp_dir)
+        final_response_text = messages[-1].content if messages and messages[-1].role == RoleType.AGENT else ""
+        messages_with_verification = _append_unverified_change_warning(
+            messages,
+            prompt,
+            final_response_text,
+            file_changes,
+        )
+        should_fail = _should_fail_for_missing_changes(
+            prompt,
+            final_response_text,
+            file_changes,
+        )
+
+        # ✅ Send completion update
+        await send_job_update(job_id=job_id, update=JobUpdate(
+            status=JobStatus.FAILED if should_fail else JobStatus.COMPLETED,
+            messages=messages_with_verification,
+            file_changes=file_changes,
+            current_step="No verified file changes were produced." if should_fail else "Done!",
+            error=(
+                "The run was expected to create or update repository files, "
+                "but no verified file changes were detected."
+                if should_fail
+                else None
+            ),
+        ))
+        
+        msg = "✅ Agent initial workflow finished, now listening for follow-ups..."
+        logging.info(msg)
+        log_cloud_text(msg, severity='INFO')
+
+        # Start polling only after the initial runner invocation completes.
+        polling_task = asyncio.create_task(poll_and_respond())
+        
+        # ✅ Wait for polling task or timeout
+        try:
+            await asyncio.wait_for(polling_task, timeout=600)  # 10 minutes
+        except asyncio.TimeoutError:
+            logging.info("⏱️ Polling timeout reached ")
+    finally:
+        if polling_task is not None:
+            polling_task.cancel()
+            try:
+                await polling_task
+            except asyncio.CancelledError:
+                pass
 
 
 async def collect_file_changes(temp_dir: str) -> List[FileChange]:
@@ -297,29 +457,35 @@ async def collect_file_changes(temp_dir: str) -> List[FileChange]:
     file_changes: List[FileChange] = []
     
     try:
-        # Get git diff
-        result = subprocess.run(
-            ["git", "diff", "--name-status"],
+        # Use porcelain status so untracked new files also appear in the UI.
+        result = await asyncio.to_thread(
+            subprocess.run,
+            ["git", "status", "--porcelain"],
             cwd=temp_dir,
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
+            check=False
         )
         
         for line in result.stdout.strip().split('\n'):
             if not line:
                 continue
-                
-            parts = line.split('\t')
-            if len(parts) < 2:
+
+            if len(line) < 4:
                 continue
-                
-            status, file_path = parts[0], parts[1]
-            change_type = {
-                'A': 'created',
-                'M': 'modified',
-                'D': 'deleted'
-            }.get(status, 'modified')
+
+            status = line[:2]
+            file_path = line[3:].strip()
+            if " -> " in file_path:
+                file_path = file_path.split(" -> ", 1)[1].strip()
+
+            if status == "??" or "A" in status:
+                change_type = "created"
+            elif "D" in status:
+                change_type = "deleted"
+            else:
+                change_type = "modified"
             
             full_path = os.path.join(temp_dir, file_path)
             
@@ -330,15 +496,17 @@ async def collect_file_changes(temp_dir: str) -> List[FileChange]:
             if change_type == 'deleted':
                 # For deleted files, get content from git
                 try:
-                    git_result = subprocess.run(
+                    git_result = await asyncio.to_thread(
+                        subprocess.run,
                         ["git", "show", f"HEAD:{file_path}"],
                         cwd=temp_dir,
                         capture_output=True,
                         text=True,
-                        timeout=10
+                        timeout=10,
+                        check=False,
                     )
                     original_content = git_result.stdout
-                except:
+                except Exception:
                     original_content = ""
             else:
                 # For created/modified files
@@ -349,15 +517,17 @@ async def collect_file_changes(temp_dir: str) -> List[FileChange]:
                 # Get original content for modified files
                 if change_type == 'modified':
                     try:
-                        git_result = subprocess.run(
+                        git_result = await asyncio.to_thread(
+                            subprocess.run,
                             ["git", "show", f"HEAD:{file_path}"],
                             cwd=temp_dir,
                             capture_output=True,
                             text=True,
-                            timeout=10
+                            timeout=10,
+                            check=False,
                         )
                         original_content = git_result.stdout
-                    except:
+                    except Exception:
                         original_content = None
             
             # Detect language
@@ -432,7 +602,7 @@ def main():
         # ✅ Log with both methods
     msg = f"🚀 Starting agent job for repo: {repo}, branch: {branch}"
     logging.info(msg)
-    cloud_logger.log_text(msg, severity='INFO')
+    log_cloud_text(msg, severity='INFO')
     print(msg)  # Also print to stdout
 
     try:
@@ -442,14 +612,14 @@ def main():
         ], check=True,capture_output=True,text=True,timeout=300)
         msg = "✅ Repository cloned successfully"
         logging.info(msg)
-        cloud_logger.log_text(msg, severity='INFO')
+        log_cloud_text(msg, severity='INFO')
         print(msg)
         logging.info("Repository clone successfully") 
     except FileNotFoundError:
         logging.critical("❌ Git not found in container. Install it in Dockerfile.")
         msg = "❌ Git not found in container"
         logging.critical(msg)
-        cloud_logger.log_text(msg, severity='ERROR')
+        log_cloud_text(msg, severity='ERROR')
         print(msg)
         sys.exit(1)
     except subprocess.CalledProcessError as e:
@@ -466,7 +636,7 @@ def main():
     try:
         msg = "🤖 Running root agent workflow..."
         logging.info(msg)
-        cloud_logger.log_text(msg, severity='INFO')
+        log_cloud_text(msg, severity='INFO')
         
         # ✅ Initialize Redis and run agent
         async def run_with_redis():
@@ -485,7 +655,7 @@ def main():
         logging.exception("Agent run failed")
         msg = f"❌ Agent run failed: {str(e)}"
         logging.exception(msg)
-        cloud_logger.log_text(msg, severity='ERROR')
+        log_cloud_text(msg, severity='ERROR')
         print(msg)
         sys.exit(1)
     finally:

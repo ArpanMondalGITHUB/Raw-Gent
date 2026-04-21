@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI 
-from routes import agent_runner_routes, internal_routes
+from routes import agent_runner_routes
 from routes import auth_routes , webhook , add_repo_route
 from fastapi.middleware.cors import CORSMiddleware
-from core.config import FRONTEND_URL
+from core.config import CORS_ORIGINS
 from services.redis import redisservices
 
 @asynccontextmanager
@@ -23,13 +23,15 @@ app.include_router(auth_routes.router)
 app.include_router(webhook.router)
 app.include_router(add_repo_route.router)
 app.include_router(agent_runner_routes.router)
-app.include_router(internal_routes.router)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        FRONTEND_URL
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
