@@ -10,8 +10,7 @@ async def get_user_installation_id(user_token: str) -> str | None:
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers)
-        print("Status:", response.status_code)
-        print("Installations response:", response.text)
+
         if response.status_code != 200:
             return None
         
@@ -39,7 +38,6 @@ async def get_repos_from_installation(installation_id: str) -> dict:
         repos_data = response.json()
         for repo in repos_data.get("repositories", []):
             repo["installation_id"] = installation_id
-        print("repos_data:", repos_data)
         return repos_data
 
 
