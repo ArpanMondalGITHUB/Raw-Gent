@@ -5,7 +5,8 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  // Ignore vendored shadcn/ui generated files — not hand-written app code.
+  { ignores: ['dist', 'src/components/ui/**', 'src/hooks/use-toast.ts'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

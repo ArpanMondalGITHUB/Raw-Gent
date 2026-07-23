@@ -1,9 +1,12 @@
 from datetime import datetime
+import hashlib
+import httpx
 import json
 import os
 import re
 import subprocess
 import tempfile
+import time
 from typing import List
 from Raw_Gent.main_agent import root_agent
 import logging
@@ -13,7 +16,7 @@ import shutil
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
-from job_runner_models import AgentMessage, FileChange, JobStatus, JobUpdate, RoleType
+from job_runner_models import AgentMessage, FileChange, JobStatus, JobUpdate, PullRequestResult, RoleType
 import redis.asyncio as redis
 import ssl
 from google.auth.exceptions import DefaultCredentialsError
@@ -48,12 +51,24 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-cloud_logger = _build_cloud_logger()
+cloud_logger = None
+_cloud_logger_initialized = False
+
+
+def _get_cloud_logger():
+    global cloud_logger, _cloud_logger_initialized
+
+    if not _cloud_logger_initialized:
+        cloud_logger = _build_cloud_logger()
+        _cloud_logger_initialized = True
+
+    return cloud_logger
 
 
 def log_cloud_text(message: str, severity: str = "INFO"):
-    if cloud_logger is not None:
-        cloud_logger.log_text(message, severity=severity)
+    logger = _get_cloud_logger()
+    if logger is not None:
+        logger.log_text(message, severity=severity)
 
 
 def _looks_like_edit_request(prompt: str) -> bool:
@@ -118,6 +133,237 @@ def _should_fail_for_missing_changes(
         return False
 
     return _looks_like_edit_request(prompt) or _claims_file_changes(response_text)
+
+
+def _change_type_value(change: FileChange) -> str:
+    return change.change_type.value if hasattr(change.change_type, "value") else str(change.change_type)
+
+
+def _file_change_summary(file_changes: List[FileChange]) -> str:
+    counts = {"created": 0, "modified": 0, "deleted": 0}
+    for change in file_changes:
+        change_type = _change_type_value(change)
+        counts[change_type] = counts.get(change_type, 0) + 1
+
+    parts = [f"{count} {change_type}" for change_type, count in counts.items() if count]
+    files_label = "file" if len(file_changes) == 1 else "files"
+    return f"{len(file_changes)} {files_label}" + (f" ({', '.join(parts)})" if parts else "")
+
+
+def _append_ready_for_review_message(messages: List[AgentMessage], file_changes: List[FileChange]) -> None:
+    content = (
+        "Ready for review.\n\n"
+        f"I found {_file_change_summary(file_changes)}. "
+        "Should I create a new branch and open a pull request?"
+    )
+
+    if messages and messages[-1].role == RoleType.AGENT and messages[-1].content == content:
+        return
+
+    messages.append(AgentMessage(
+        role=RoleType.AGENT,
+        content=content,
+        timestamp=datetime.now().isoformat(),
+    ))
+
+
+def _completion_step(should_fail: bool, file_changes: List[FileChange]) -> str:
+    if should_fail:
+        return "No verified file changes were produced."
+
+    if file_changes:
+        return "Ready for review"
+
+    return "Done!"
+
+
+def _latest_message_content(messages: List[AgentMessage], role: RoleType, fallback: str = "") -> str:
+    for message in reversed(messages):
+        if message.role == role:
+            return message.content
+
+    return fallback
+
+
+def _latest_agent_work_response(messages: List[AgentMessage]) -> str:
+    ignored_prefixes = (
+        "Ready for review.",
+        "I could not create the pull request:",
+    )
+    for message in reversed(messages):
+        if message.role == RoleType.AGENT and not message.content.startswith(ignored_prefixes):
+            return message.content
+
+    return ""
+
+
+def _shorten_line(value: str, max_length: int) -> str:
+    collapsed = re.sub(r"\s+", " ", value).strip()
+    if len(collapsed) <= max_length:
+        return collapsed
+
+    return collapsed[: max_length - 3].rstrip() + "..."
+
+
+def _build_pr_title(prompt: str, file_changes: List[FileChange]) -> str:
+    subject = re.sub(r"^(please|can you|could you|would you)\s+", "", prompt.strip(), flags=re.IGNORECASE)
+    subject = _shorten_line(subject, 62)
+
+    if not subject:
+        subject = f"update {_file_change_summary(file_changes)}"
+
+    normalized = prompt.lower()
+    if any(keyword in normalized for keyword in ("test", "pytest", "spec")):
+        prefix = "test"
+    elif any(keyword in normalized for keyword in ("fix", "bug", "error", "issue")):
+        prefix = "fix"
+    elif "refactor" in normalized:
+        prefix = "refactor"
+    elif any(keyword in normalized for keyword in ("doc", "readme")):
+        prefix = "docs"
+    else:
+        prefix = "feat"
+
+    return _shorten_line(f"{prefix}: {subject}", 72)
+
+
+def _build_branch_name(title: str, job_id: str | None) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "changes"
+    seed = f"{title}:{job_id or ''}:{time.time_ns()}"
+    suffix = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:8]
+    return f"raw-gent/{slug[:48]}-{suffix}"
+
+
+def _parse_numstat(stdout: str) -> tuple[int, int]:
+    additions = 0
+    deletions = 0
+
+    for line in stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+
+        added, deleted = parts[0], parts[1]
+        if added.isdigit():
+            additions += int(added)
+        if deleted.isdigit():
+            deletions += int(deleted)
+
+    return additions, deletions
+
+
+def _build_pr_body(prompt: str, response_text: str, file_changes: List[FileChange]) -> str:
+    changed_files = "\n".join(
+        f"- {change.file_path} ({_change_type_value(change)})"
+        for change in file_changes[:30]
+    )
+    extra_count = len(file_changes) - 30
+    if extra_count > 0:
+        changed_files += f"\n- ...and {extra_count} more"
+
+    body_parts = [
+        "Generated by Raw Gent.",
+        "",
+        "Request:",
+        _shorten_line(prompt, 1000) or "No request text available.",
+        "",
+        "Agent response:",
+        _shorten_line(response_text, 2500) or "No response text available.",
+        "",
+        "Changed files:",
+        changed_files or "- No changed files listed.",
+    ]
+    return "\n".join(body_parts)
+
+
+async def _run_git(temp_dir: str, args: list[str], timeout: int = 120, check: bool = True) -> subprocess.CompletedProcess:
+    result = await asyncio.to_thread(
+        subprocess.run,
+        ["git", *args],
+        cwd=temp_dir,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+    if check and result.returncode != 0:
+        output = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(f"git {' '.join(args)} failed: {output[:1000]}")
+
+    return result
+
+
+async def create_branch_and_pr(
+    temp_dir: str,
+    repo: str,
+    base_branch: str,
+    token: str,
+    title: str,
+    body: str,
+    job_id: str | None,
+) -> PullRequestResult:
+    if "/" not in repo:
+        raise ValueError("Repository must be in owner/repo format")
+
+    branch_name = _build_branch_name(title, job_id)
+
+    await _run_git(temp_dir, ["config", "user.name", "Raw Gent Agent"])
+    await _run_git(temp_dir, ["config", "user.email", "raw-gent-agent@users.noreply.github.com"])
+    await _run_git(temp_dir, ["checkout", "-b", branch_name])
+    await _run_git(temp_dir, ["add", "-A"])
+
+    diff_check = await _run_git(temp_dir, ["diff", "--cached", "--quiet"], check=False)
+    if diff_check.returncode == 0:
+        raise RuntimeError("No changes to commit")
+    if diff_check.returncode != 1:
+        output = (diff_check.stderr or diff_check.stdout or "").strip()
+        raise RuntimeError(f"Unable to inspect staged changes: {output[:1000]}")
+
+    numstat = await _run_git(temp_dir, ["diff", "--cached", "--numstat"])
+    additions, deletions = _parse_numstat(numstat.stdout)
+
+    await _run_git(temp_dir, ["commit", "-m", title])
+    await _run_git(temp_dir, ["push", "-u", "origin", branch_name], timeout=300)
+
+    owner, repo_name = repo.split("/", 1)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    payload = {
+        "title": title,
+        "body": body,
+        "head": branch_name,
+        "base": base_branch,
+        "maintainer_can_modify": True,
+        "draft": False,
+    }
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            f"https://api.github.com/repos/{owner}/{repo_name}/pulls",
+            headers=headers,
+            json=payload,
+        )
+
+    if response.status_code != 201:
+        raise RuntimeError(
+            f"GitHub PR creation failed ({response.status_code}): {response.text[:1000]}"
+        )
+
+    pr = response.json()
+    return PullRequestResult(
+        branch_name=branch_name,
+        branch_url=f"https://github.com/{repo}/tree/{branch_name}",
+        pr_url=pr["html_url"],
+        pr_number=pr["number"],
+        title=pr["title"],
+        body=body,
+        additions=additions,
+        deletions=deletions,
+    )
 
 # Redis client for cloud run
 redis_client:redis.Redis = None
@@ -185,7 +431,7 @@ async def send_job_update(job_id: str, update: JobUpdate) -> None:
     """Send update via Redis pub/sub only (no HTTP)"""
     try:
         channel = f"job:{job_id}:updates"
-        update_payload = update.model_dump(mode="json", exclude_none=False)
+        update_payload = update.model_dump(mode="json", exclude_none=True)
         existing_status_raw = await redis_client.get(f"job:{job_id}:status")
         existing_status = json.loads(existing_status_raw) if existing_status_raw else {}
         merged_status = {
@@ -193,7 +439,9 @@ async def send_job_update(job_id: str, update: JobUpdate) -> None:
             **update_payload,
             "job_id": existing_status.get("job_id", job_id),
         }
-        merged_status = {key: value for key, value in merged_status.items() if value is not None}
+        for nullable_field in ("error", "pr_result"):
+            if nullable_field in update.model_fields_set and getattr(update, nullable_field) is None:
+                merged_status.pop(nullable_field, None)
         merged_status["updated_at"] = datetime.now().isoformat()
         
         # Convert update to dict
@@ -340,13 +588,16 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
                         logging.info(f"🤖 Agent response: {response_text[:100]}")
 
                         file_changes: List[FileChange] = await collect_file_changes(temp_dir)
-                        messages_with_verification = _append_unverified_change_warning(
-                            messages,
+                        should_fail = _should_fail_for_missing_changes(
                             user_msg["content"],
                             response_text,
                             file_changes,
                         )
-                        should_fail = _should_fail_for_missing_changes(
+                        if not should_fail and file_changes:
+                            _append_ready_for_review_message(messages, file_changes)
+
+                        messages_with_verification = _append_unverified_change_warning(
+                            messages,
                             user_msg["content"],
                             response_text,
                             file_changes,
@@ -355,7 +606,7 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
                             status=JobStatus.FAILED if should_fail else JobStatus.COMPLETED,
                             messages=messages_with_verification,
                             file_changes=file_changes,
-                            current_step="No verified file changes were produced." if should_fail else "Done!",
+                            current_step=_completion_step(should_fail, file_changes),
                             error=(
                                 "The run was expected to create or update repository files, "
                                 "but no verified file changes were detected."
@@ -363,6 +614,65 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
                                 else None
                             ),
                         ))
+            elif user_msg.get("type") == "create_pr":
+                file_changes = await collect_file_changes(temp_dir)
+                await send_job_update(job_id=job_id, update=JobUpdate(
+                    status=JobStatus.RUNNING,
+                    messages=messages,
+                    file_changes=file_changes,
+                    current_step="Creating branch and opening pull request...",
+                ))
+
+                try:
+                    if not file_changes:
+                        raise RuntimeError("No repository file changes are available to submit.")
+
+                    latest_prompt = _latest_message_content(messages, RoleType.USER, prompt)
+                    latest_response = _latest_agent_work_response(messages)
+                    title = _build_pr_title(latest_prompt, file_changes)
+                    body = _build_pr_body(latest_prompt, latest_response, file_changes)
+                    pr_result = await create_branch_and_pr(
+                        temp_dir=temp_dir,
+                        repo=repo,
+                        base_branch=branch,
+                        token=token,
+                        title=title,
+                        body=body,
+                        job_id=job_id,
+                    )
+
+                    messages.append(AgentMessage(
+                        role=RoleType.AGENT,
+                        content=(
+                            "Ready for review.\n\n"
+                            f"Opened pull request #{pr_result.pr_number}: {pr_result.pr_url}"
+                        ),
+                        timestamp=datetime.now().isoformat(),
+                    ))
+
+                    await send_job_update(job_id=job_id, update=JobUpdate(
+                        status=JobStatus.COMPLETED,
+                        messages=messages,
+                        file_changes=file_changes,
+                        pr_result=pr_result,
+                        current_step="Ready for review",
+                        error=None,
+                    ))
+                except Exception as exc:
+                    error_message = str(exc)
+                    logging.exception(f"Failed to create pull request: {error_message}")
+                    messages.append(AgentMessage(
+                        role=RoleType.AGENT,
+                        content=f"I could not create the pull request: {error_message}",
+                        timestamp=datetime.now().isoformat(),
+                    ))
+                    await send_job_update(job_id=job_id, update=JobUpdate(
+                        status=JobStatus.FAILED,
+                        messages=messages,
+                        file_changes=file_changes,
+                        current_step="Failed to create pull request",
+                        error=error_message,
+                    ))
     
     polling_task: asyncio.Task | None = None
 
@@ -397,13 +707,16 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
         # ✅ Collect file changes
         file_changes: List[FileChange] = await collect_file_changes(temp_dir)
         final_response_text = messages[-1].content if messages and messages[-1].role == RoleType.AGENT else ""
-        messages_with_verification = _append_unverified_change_warning(
-            messages,
+        should_fail = _should_fail_for_missing_changes(
             prompt,
             final_response_text,
             file_changes,
         )
-        should_fail = _should_fail_for_missing_changes(
+        if not should_fail and file_changes:
+            _append_ready_for_review_message(messages, file_changes)
+
+        messages_with_verification = _append_unverified_change_warning(
+            messages,
             prompt,
             final_response_text,
             file_changes,
@@ -414,7 +727,7 @@ async def run_agent_async(prompt: str, repo: str, branch: str, token: str, temp_
             status=JobStatus.FAILED if should_fail else JobStatus.COMPLETED,
             messages=messages_with_verification,
             file_changes=file_changes,
-            current_step="No verified file changes were produced." if should_fail else "Done!",
+            current_step=_completion_step(should_fail, file_changes),
             error=(
                 "The run was expected to create or update repository files, "
                 "but no verified file changes were detected."

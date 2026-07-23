@@ -80,7 +80,7 @@ export function MainContent() {
     setSelectedRepo(repo);
     setShowDropdown(false);
     try {
-      const branchresponse = await fetchbranch(repo.name);
+      const branchresponse = await fetchbranch(repo.owner.login, repo.name);
       const branchesdata = branchresponse.Branches || [];
       setBranches(branchesdata);
 
@@ -134,7 +134,7 @@ export function MainContent() {
             setInstallationId(instId);
             sessionStorage.setItem('github_installation_id', instId.toString());
           }
-          const branchresponse = await fetchbranch(firstrepo.name);
+          const branchresponse = await fetchbranch(firstrepo.owner.login, firstrepo.name);
           const branchesdata = branchresponse.Branches || [];
           setBranches(branchesdata);
 

@@ -23,6 +23,7 @@ export type RoleType = z.infer<typeof RoleTypeSchema>;
 
 export const WebSocketMessageTypeSchema = z.enum([
     'user_message',
+    'create_pr',
     'agent_message',
     'status_update',
     'error',
@@ -53,6 +54,18 @@ export const FileChangeSchema = z.object({
 })
 export type FileChange = z.infer<typeof FileChangeSchema>;
 
+export const PullRequestResultSchema = z.object({
+    branch_name: z.string(),
+    branch_url: z.string(),
+    pr_url: z.string(),
+    pr_number: z.number(),
+    title: z.string(),
+    body: z.string().nullable().optional(),
+    additions: z.number().default(0),
+    deletions: z.number().default(0),
+})
+export type PullRequestResult = z.infer<typeof PullRequestResultSchema>;
+
 export const AgentMessageSchema = z.object({
     role: RoleTypeSchema,
     content: z.string(),
@@ -65,6 +78,7 @@ export const JobStatusResponseSchema = z.object({
     status: JobStatusSchema,
     messages: z.array(AgentMessageSchema),
     file_changes: z.array(FileChangeSchema),
+    pr_result: PullRequestResultSchema.nullable().optional(),
     current_step: z.string().nullable().optional(),
     error: z.string().nullable().optional(),
     created_at: z.string(),

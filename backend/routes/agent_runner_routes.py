@@ -77,9 +77,9 @@ async def websocket_handler(websocket:WebSocket,job_id:str):
                         # Handle pong
                         if message.get("type") == "pong":
                             await manager.update_heartbeat(websocket=websocket,job_id=job_id)
-                        # Handle usermessage
-                        elif message.get("type") == "user_message":
-                             # send user message to cloud via redis queue
+                        # Handle user messages and review submission commands.
+                        elif message.get("type") in {"user_message", "create_pr"}:
+                            # send user message to cloud via redis queue
                             await redisservices.add_message_to_queue(job_id=job_id,msg=message)
                             await websocket.send_json(message)
                     except json.JSONDecodeError as e:

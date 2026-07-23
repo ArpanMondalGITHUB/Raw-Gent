@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from httpx import AsyncClient, ASGITransport
 
 with patch("services.ws.JobConnectionManager", MagicMock()):
@@ -50,7 +50,8 @@ async def test_list_installation_repos_exception(client):
 @pytest.mark.asyncio
 async def test_branches_name_missing_installation_id(client):
     response = await client.get(
-        "/branches/repo-one"
+        "/branches/repo-one",
+        params={"owner": "owner-one"},
     )
 
     assert response.status_code == 400
@@ -58,11 +59,16 @@ async def test_branches_name_missing_installation_id(client):
 
 @pytest.mark.asyncio
 async def test_branches_name_success(client):
-    with patch("routes.add_repo_route.get_repo_branches",
-               return_value =[{"name":"branch-one"},{"name":"branch-two"}]):
-        
+    gh = AsyncMock()
+    gh.__aenter__.return_value = gh
+    gh.list_branches.return_value = [{"name": "branch-one"}, {"name": "branch-two"}]
+
+    with patch("routes.add_repo_route.GitHubMCP.for_installation",
+               AsyncMock(return_value=gh)):
+
         response = await client.get(
             "/branches/repo-one",
+            params={"owner": "owner-one"},
             cookies={"installation_id": "fake_id_123"},
         )
 
@@ -72,11 +78,12 @@ async def test_branches_name_success(client):
 
 @pytest.mark.asyncio
 async def test_branches_exception(client):
-    with patch("routes.add_repo_route.get_repo_branches",
-               side_effect=Exception("GitHub down")):
+    with patch("routes.add_repo_route.GitHubMCP.for_installation",
+               AsyncMock(side_effect=Exception("GitHub down"))):
 
         response = await client.get(
             "/branches/repo-one",
+            params={"owner": "owner-one"},
             cookies={"installation_id": "fake_id_123"},
         )
 

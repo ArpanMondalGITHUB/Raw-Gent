@@ -9,6 +9,9 @@ from typing import Any
 import redis.asyncio as redis
 import ssl
 
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +20,9 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+QUEUE_POLL_TIMEOUT_SECONDS = int(os.getenv("QUEUE_POLL_TIMEOUT_SECONDS", "5"))
+REDIS_RECONNECT_DELAY_SECONDS = float(os.getenv("REDIS_RECONNECT_DELAY_SECONDS", "1"))
+
 
 def _get_bool_env(name: str, default: bool) -> bool:
     value = os.getenv(name)
@@ -24,6 +30,18 @@ def _get_bool_env(name: str, default: bool) -> bool:
         return default
 
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_float_env(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+
+    try:
+        return float(value.strip())
+    except ValueError:
+        logger.warning("Invalid %s=%r; using %s", name, value, default)
+        return default
 
 
 def _get_queue_name() -> str:
@@ -41,6 +59,12 @@ async def create_redis_client() -> redis.Redis:
     options: dict[str, Any] = {
         "encoding": "utf-8",
         "decode_responses": True,
+        "health_check_interval": int(_get_float_env("REDIS_HEALTH_CHECK_INTERVAL", 30)),
+        "socket_connect_timeout": _get_float_env("REDIS_SOCKET_CONNECT_TIMEOUT", 5),
+        "socket_timeout": _get_float_env(
+            "REDIS_SOCKET_TIMEOUT",
+            QUEUE_POLL_TIMEOUT_SECONDS + 5,
+        ),
     }
 
     if redis_url.startswith("rediss://"):
@@ -146,7 +170,22 @@ async def main():
 
     try:
         while True:
-            result = await redis_client.blpop(queue_name, timeout=5)
+            try:
+                result = await redis_client.blpop(
+                    queue_name,
+                    timeout=QUEUE_POLL_TIMEOUT_SECONDS,
+                )
+            except RedisTimeoutError:
+                logger.debug("Redis queue poll timed out; waiting for the next poll")
+                continue
+            except RedisConnectionError as exc:
+                logger.warning("Redis connection lost while polling queue: %s", exc)
+                await redis_client.aclose()
+                await asyncio.sleep(REDIS_RECONNECT_DELAY_SECONDS)
+                redis_client = await create_redis_client()
+                logger.info(f"Local worker reconnected to Redis and is listening on {queue_name}")
+                continue
+
             if not result:
                 continue
 
@@ -160,7 +199,7 @@ async def main():
                 if job_id != "unknown":
                     await publish_failed_status(redis_client, job_id, str(exc))
     finally:
-        await redis_client.close()
+        await redis_client.aclose()
 
 
 if __name__ == "__main__":

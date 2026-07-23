@@ -44,7 +44,6 @@ htmlcov/
 # IDE folders
 .idea/
 
-.github
 private-key.pem
 node_modules
 private-key.pem

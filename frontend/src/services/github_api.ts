@@ -5,7 +5,9 @@ export const fetchInstallRepos = async() => {
     return response.data
 }
 
-export const fetchbranch = async (repo_name:string) => {
-    const response = await apiClient.get(`/branches/${repo_name}`);
-    return response.data;
+export const fetchbranch = async (owner: string, repo_name: string) => {
+  const response = await apiClient.get(`/branches/${repo_name}`, {
+    params: { owner },
+  });
+  return response.data;
 }

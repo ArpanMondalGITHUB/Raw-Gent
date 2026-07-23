@@ -27,9 +27,11 @@ describe('github_api service', () => {
   it('fetches branches for a repository', async () => {
     mocks.get.mockResolvedValueOnce({ data: { Branches: [{ name: 'main' }] } });
 
-    await expect(fetchbranch('raw-gent')).resolves.toEqual({
+    await expect(fetchbranch('arpan', 'raw-gent')).resolves.toEqual({
       Branches: [{ name: 'main' }],
     });
-    expect(mocks.get).toHaveBeenCalledWith('/branches/raw-gent');
+    expect(mocks.get).toHaveBeenCalledWith('/branches/raw-gent', {
+      params: { owner: 'arpan' },
+    });
   });
 });

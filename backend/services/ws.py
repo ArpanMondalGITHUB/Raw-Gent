@@ -41,11 +41,18 @@ class JobConnectionManager:
 
         self._lock = asyncio.Lock()
 
-        # start background task to monitor connections
+        self.monitor_task: asyncio.Task | None = None
+
+    def _ensure_monitor_task(self):
+        if self.monitor_task and not self.monitor_task.done():
+            return
+
         try:
-           self.monitor_task = asyncio.create_task(self._monitor_connection())
+            loop = asyncio.get_running_loop()
         except RuntimeError:
-           self.monitor_task = None
+            return
+
+        self.monitor_task = loop.create_task(self._monitor_connection())
            
     async def connect(self,websocket:WebSocket,job_id:str):
         """
@@ -53,6 +60,8 @@ class JobConnectionManager:
 
         """
         try:
+            self._ensure_monitor_task()
+
             # accept connections
             await websocket.accept()
 
@@ -177,10 +186,16 @@ class JobConnectionManager:
        logger.info("🛑 Shutting down WebSocket manager...")
 
      # cancel monitor
-       self.monitor_task.cancel()
+       if self.monitor_task:
+          self.monitor_task.cancel()
+          try:
+             await self.monitor_task
+          except asyncio.CancelledError:
+             pass
+          self.monitor_task = None
 
      # cancel all heartbeat task
-       for task in self.heartbeat_task.values():
+       for task in list(self.heartbeat_task.values()):
           task.cancel()
 
      # Close all connections

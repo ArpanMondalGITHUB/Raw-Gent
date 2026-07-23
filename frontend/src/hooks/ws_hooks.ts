@@ -83,6 +83,10 @@ export function useWebsocket(job_id: string | null) {
           break;
         }
 
+        case "create_pr": {
+          break;
+        }
+
         case "error": {
           console.error("❌ Server error:", message.content);
           break;
@@ -120,10 +124,23 @@ export function useWebsocket(job_id: string | null) {
     [job_id],
   );
 
+  const onCreatePr = useCallback(() => {
+    if (!job_id || wsRef.current?.readyState !== WebSocket.OPEN) return;
+
+    const message: WebScoketMessageResponse = {
+      type: "create_pr",
+      content: "yes",
+      job_id: job_id,
+      timestamp: new Date().toISOString(),
+    };
+
+    wsRef.current.send(JSON.stringify(message));
+  }, [job_id]);
+
   const disconnect = useCallback(() => {
     wsRef.current?.close();
     wsRef.current = null;
   }, []);
 
-  return { isConnected, jobStatus, messages, onSendMessage, disconnect };
+  return { isConnected, jobStatus, messages, onSendMessage, onCreatePr, disconnect };
 }
