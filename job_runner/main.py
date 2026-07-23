@@ -51,12 +51,24 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-cloud_logger = _build_cloud_logger()
+cloud_logger = None
+_cloud_logger_initialized = False
+
+
+def _get_cloud_logger():
+    global cloud_logger, _cloud_logger_initialized
+
+    if not _cloud_logger_initialized:
+        cloud_logger = _build_cloud_logger()
+        _cloud_logger_initialized = True
+
+    return cloud_logger
 
 
 def log_cloud_text(message: str, severity: str = "INFO"):
-    if cloud_logger is not None:
-        cloud_logger.log_text(message, severity=severity)
+    logger = _get_cloud_logger()
+    if logger is not None:
+        logger.log_text(message, severity=severity)
 
 
 def _looks_like_edit_request(prompt: str) -> bool:

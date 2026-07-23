@@ -22,8 +22,6 @@ from contextlib import AsyncExitStack
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
-from github.github_app_client import _load_private_key
-
 GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 
 
@@ -47,7 +45,7 @@ class GitHubMCP:
 
         token = await mint_installation_token(installation_id)
         return cls(token)
-    private_key = _load_private_key()
+
     async def __aenter__(self) -> "GitHubMCP":
         read, write, _ = await self._stack.enter_async_context(
             streamablehttp_client(
