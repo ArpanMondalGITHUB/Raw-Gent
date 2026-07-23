@@ -1,4 +1,4 @@
-import { useState, useEffect, startTransition, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import Hero3DScene from '../components/Hero3DScene';
@@ -10,8 +10,7 @@ import { loginWithGitHub } from "../services/auth";
 
 const Index = () => {
   const [isLoaded, setIsLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const[pending , startTransition] = useTransition()
+  const [pending, startTransition] = useTransition()
   const handleLogin = () =>{
     startTransition( ()=>{
       new Promise(res=>setTimeout(res,5000))

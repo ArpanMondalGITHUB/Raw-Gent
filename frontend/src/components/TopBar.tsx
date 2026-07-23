@@ -3,7 +3,7 @@ import { Button } from "../components/ui/button";
 import { useState } from "react";
 
 export function TopBar() {
-  const[user , setUser] = useState(null)
+  const [user] = useState(null)
   
   return (
     <div className="absolute top-0 right-0 p-4 flex items-center gap-2 z-10">

@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "./ui/button";
-import { ArrowRight, CheckCircle2, Circle, CircleDot, XCircle } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Circle,
+  CircleDot,
+  ExternalLink,
+  GitBranch,
+  GitPullRequest,
+  Loader2,
+  XCircle,
+} from "lucide-react";
 import { DiffEditor } from "@monaco-editor/react";
 import { AgentMessage, JobStatusResponse } from "../schemas/run_agent.schemas";
 
@@ -9,6 +19,7 @@ export interface ChatuiProps {
   jobStatus: JobStatusResponse | null;
   messages: AgentMessage[];
   onSendMessage: (content: string) => void;
+  onCreatePr?: () => void;
   isConnected: boolean;
 }
 
@@ -52,11 +63,26 @@ function statusBadge(status?: string) {
   }
 }
 
-export function Chatui({ jobStatus, messages, onSendMessage, isConnected }: ChatuiProps) {
+export function Chatui({ jobStatus, messages, onSendMessage, onCreatePr, isConnected }: ChatuiProps) {
   const [draft, setDraft] = useState("");
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [createPrRequested, setCreatePrRequested] = useState(false);
 
   const fileChanges = useMemo(() => jobStatus?.file_changes ?? [], [jobStatus?.file_changes]);
+  const prResult = jobStatus?.pr_result ?? null;
+  const isCreatingPr =
+    jobStatus?.status === "running" &&
+    Boolean(jobStatus?.current_step?.toLowerCase().includes("pull request"));
+  const canCreatePr = Boolean(
+    jobStatus &&
+    jobStatus.status === "completed" &&
+    fileChanges.length > 0 &&
+    !prResult &&
+    !jobStatus.error,
+  );
+  const showReviewPanel =
+    fileChanges.length > 0 &&
+    (canCreatePr || Boolean(prResult) || isCreatingPr || createPrRequested);
 
   const sortedFileChanges = useMemo(() => {
     const priority: Record<string, number> = {
@@ -115,11 +141,23 @@ export function Chatui({ jobStatus, messages, onSendMessage, isConnected }: Chat
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    if (prResult || jobStatus?.status === "failed") {
+      setCreatePrRequested(false);
+    }
+  }, [jobStatus?.status, prResult]);
+
   const send = () => {
     const trimmed = draft.trim();
     if (!trimmed || !isConnected) return;
     onSendMessage(trimmed);
     setDraft("");
+  };
+
+  const createPr = () => {
+    if (!canCreatePr || !isConnected || !onCreatePr) return;
+    setCreatePrRequested(true);
+    onCreatePr();
   };
 
   return (
@@ -165,6 +203,64 @@ export function Chatui({ jobStatus, messages, onSendMessage, isConnected }: Chat
                 </div>
                 <p className="mt-2 text-sm text-gray-200">{lastMessage}</p>
               </div>
+
+              {showReviewPanel && (
+                <div className="rounded-xl border border-emerald-800/70 bg-[#17231f] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+                        <GitPullRequest className="h-4 w-4" />
+                        Ready for review
+                      </h3>
+                      <p className="mt-2 text-sm text-emerald-50/80">
+                        {prResult
+                          ? `PR #${prResult.pr_number} is open on ${prResult.branch_name}.`
+                          : "Create a new branch and open a pull request for these changes."}
+                      </p>
+                      {prResult && (
+                        <div className="mt-2 text-xs text-emerald-100/70">
+                          +{prResult.additions} -{prResult.deletions}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {!prResult && (
+                      <Button
+                        onClick={createPr}
+                        disabled={!canCreatePr || !isConnected || !onCreatePr || createPrRequested || isCreatingPr}
+                        size="sm"
+                        className="bg-emerald-600 text-white hover:bg-emerald-500"
+                      >
+                        {createPrRequested || isCreatingPr ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <GitPullRequest className="h-4 w-4" />
+                        )}
+                        Create PR
+                      </Button>
+                    )}
+
+                    {prResult && (
+                      <>
+                        <Button asChild size="sm" variant="secondary">
+                          <a href={prResult.branch_url} target="_blank" rel="noreferrer">
+                            <GitBranch className="h-4 w-4" />
+                            View branch
+                          </a>
+                        </Button>
+                        <Button asChild size="sm" variant="secondary">
+                          <a href={prResult.pr_url} target="_blank" rel="noreferrer">
+                            <ExternalLink className="h-4 w-4" />
+                            View PR
+                          </a>
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-xl border border-gray-700 bg-[#1e1b22] p-4">
                 <h3 className="text-sm font-semibold text-white">Conversation</h3>

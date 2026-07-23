@@ -48,6 +48,7 @@ beforeEach(() => {
         name: 'raw-gent',
         full_name: 'arpan/raw-gent',
         installation_id: '88',
+        owner: { login: 'arpan' },
       },
     ],
   });
@@ -62,7 +63,7 @@ describe('MainContent', () => {
     expect(await screen.findByText('arpan/raw-gent')).toBeInTheDocument();
     expect(screen.getByDisplayValue('main')).toBeInTheDocument();
     expect(mocks.fetchInstallRepos).toHaveBeenCalledTimes(1);
-    expect(mocks.fetchbranch).toHaveBeenCalledWith('raw-gent');
+    expect(mocks.fetchbranch).toHaveBeenCalledWith('arpan', 'raw-gent');
   });
 
   it('runs the agent and stores current task data', async () => {

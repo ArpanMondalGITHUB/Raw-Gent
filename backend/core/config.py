@@ -20,6 +20,17 @@ def _get_bool_env(name: str, default: bool) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
+def _get_int_env(name: str, default: int) -> int:
+    value = _clean_env(name)
+    if value is None:
+        return default
+
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
 def _get_csv_env(name: str) -> list[str]:
     value = _clean_env(name)
     if not value:
@@ -61,6 +72,11 @@ FRONTEND_URL = _clean_env("FRONTEND_URL")
 BACKEND_URL = _clean_env("BACKEND_URL")
 REDIS_URL = _clean_env("REDIS_URL") or "redis://localhost:6379/0"
 REDIS_SSL_VERIFY = _get_bool_env("REDIS_SSL_VERIFY", REDIS_URL.startswith("rediss://"))
+
+# Rate limiting (Redis-backed, fixed-window)
+RATE_LIMIT_ENABLED = _get_bool_env("RATE_LIMIT_ENABLED", True)
+RATE_LIMIT_REQUESTS = _get_int_env("RATE_LIMIT_REQUESTS", 100)
+RATE_LIMIT_WINDOW_SECONDS = _get_int_env("RATE_LIMIT_WINDOW_SECONDS", 60)
 
 # HTTP / CORS
 CORS_ORIGINS = _get_csv_env("CORS_ORIGINS")

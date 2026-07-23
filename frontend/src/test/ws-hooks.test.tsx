@@ -179,6 +179,19 @@ describe('useWebsocket', () => {
     });
   });
 
+  it('sends create PR commands when connected', () => {
+    const { result } = renderHook(() => useWebsocket('job-1'));
+    const ws = MockWebSocket.instances[0];
+
+    act(() => result.current.onCreatePr());
+
+    expect(JSON.parse(ws.sent[0])).toMatchObject({
+      type: 'create_pr',
+      content: 'yes',
+      job_id: 'job-1',
+    });
+  });
+
   it('does not send messages when the socket is not open', () => {
     const { result } = renderHook(() => useWebsocket('job-1'));
     const ws = MockWebSocket.instances[0];

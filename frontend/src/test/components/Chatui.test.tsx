@@ -67,11 +67,30 @@ describe('Chatui', () => {
     expect(screen.getByText('job-1')).toBeInTheDocument();
     expect(screen.getByText('Completed')).toBeInTheDocument();
     expect(screen.getByText('Connected')).toBeInTheDocument();
+    expect(screen.getByText('Ready for review')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /create pr/i })).toBeInTheDocument();
     expect(screen.getByText('Please fix this')).toBeInTheDocument();
     expect(screen.getAllByText('All done')).toHaveLength(2);
     expect(screen.getByText('app.ts')).toBeInTheDocument();
     expect(screen.getByText('new.ts')).toBeInTheDocument();
     expect(screen.getByTestId('diff-editor')).toHaveAttribute('data-original', 'old app');
+  });
+
+  it('requests PR creation from the review panel', () => {
+    const onCreatePr = vi.fn();
+    render(
+      <Chatui
+        jobStatus={jobStatus}
+        messages={messages}
+        onSendMessage={vi.fn()}
+        onCreatePr={onCreatePr}
+        isConnected
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /create pr/i }));
+
+    expect(onCreatePr).toHaveBeenCalledTimes(1);
   });
 
   it('sends trimmed messages on enter and clears the input', () => {

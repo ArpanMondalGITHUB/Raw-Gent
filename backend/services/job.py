@@ -7,7 +7,15 @@ from google.oauth2 import service_account
 import uuid
 from datetime import datetime
 from google.cloud import run_v2
-from models.agent_model import FileChange, JobStatus, JobStatusResponse, RoleType, RunAgentRequest , AgentMessage
+from models.agent_model import (
+    AgentMessage,
+    FileChange,
+    JobStatus,
+    JobStatusResponse,
+    PullRequestResult,
+    RoleType,
+    RunAgentRequest,
+)
 from core.config import (
     BACKEND_URL,
     CLOUD_RUN_JOB,
@@ -162,6 +170,9 @@ def update_job_status(job_id: str, update: Dict[Any, Any]) -> bool:
     
     if "file_changes" in update:
         current.file_changes = [FileChange(**fc) for fc in update["file_changes"]]
+
+    if "pr_result" in update:
+        current.pr_result = PullRequestResult(**update["pr_result"]) if update["pr_result"] else None
     
     if "current_step" in update:
         current.current_step = update["current_step"]

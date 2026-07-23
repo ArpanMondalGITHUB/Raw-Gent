@@ -34,6 +34,16 @@ class FileChange(BaseModel):
     change_type: ChangeType  # "created", "modified", "deleted"
     language: str
 
+class PullRequestResult(BaseModel):
+    branch_name: str
+    branch_url: str
+    pr_url: str
+    pr_number: int
+    title: str
+    body: Optional[str] = None
+    additions: int = 0
+    deletions: int = 0
+
 class AgentMessage(BaseModel):
     role: RoleType  # "agent" or "user"
     content: str
@@ -45,6 +55,7 @@ class JobStatusResponse(BaseModel):
     status: JobStatus
     messages: List[AgentMessage]
     file_changes: List[FileChange]
+    pr_result: Optional[PullRequestResult] = None
     current_step: Optional[str] = None
     error: Optional[str] = None
     created_at: str

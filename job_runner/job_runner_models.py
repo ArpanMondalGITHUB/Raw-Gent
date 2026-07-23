@@ -25,6 +25,7 @@ class AgentMessage(BaseModel):
 
 class WebSocketMessageType (str,Enum):
     USER_MESSAGE ="user_message"
+    CREATE_PR = "create_pr"
     AGENT_MESSAGE = "agent_message"
     STATUS_UPDATE = "status_update"
     ERROR = "error"
@@ -36,10 +37,21 @@ class FileChange(BaseModel):
     change_type: ChangeType
     language: str
 
+class PullRequestResult(BaseModel):
+    branch_name: str
+    branch_url: str
+    pr_url: str
+    pr_number: int
+    title: str
+    body: Optional[str] = None
+    additions: int = 0
+    deletions: int = 0
+
 class JobUpdate(BaseModel):
     status: JobStatus
     messages: Optional[List[AgentMessage]] = None
     file_changes: Optional[List[FileChange]] = None
+    pr_result: Optional[PullRequestResult] = None
     current_step: Optional[str] = None
     error: Optional[str] = None
 

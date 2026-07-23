@@ -2,9 +2,8 @@ from fastapi import APIRouter , Request
 from fastapi.responses import JSONResponse
 from core.config import COOKIE_INSTALLATION_NAME
 from services.github_app_service import get_repos_from_installation , get_repo_branches
-
+from mcp_clients.github_mcp import GitHubMCP
 router = APIRouter()
-
 
 @router.get("/installation-repos")
 async def list_installation_repos(request: Request):
@@ -15,22 +14,33 @@ async def list_installation_repos(request: Request):
     try:
         repos_data = await get_repos_from_installation(installation_id)
         repos = repos_data.get("repositories",[])
-        # return JSONResponse({"repositories": repos_data["repositories"]})
         return JSONResponse({"repositories": repos})
     except Exception as e:
-        print(f"[ERROR] Failed to get repos from installation: {e}")
         return JSONResponse({"error": "Failed to fetch repositories"}, status_code=500)
-    
+
 
 @router.get("/branches/{repo_name}")
-async def name(repo_name:str,request:Request):
+async def name(repo_name:str,owner:str,request:Request):
     installation_id = request.cookies.get(COOKIE_INSTALLATION_NAME)
     if not installation_id:
-        return JSONResponse({"error": "No installation ID"}, status_code=400)
+        return JSONResponse({"error":"No installation ID"}, status_code=400)
     
     try:
-      branches = await get_repo_branches(installation_id,repo_name)
-      return JSONResponse({"Branches":branches})
-    except Exception as e:
-        print(f"[ERROR] Failed to get repos from installation: {e}")
+        gh = await GitHubMCP.for_installation(installation_id)
+        async with gh:
+            branches = await gh.list_branches(owner,repo_name)
+        return JSONResponse({"Branches": branches})
+    except Exception:
         return JSONResponse({"error": "Failed to fetch repositories"}, status_code=500)
+
+# @router.get("/branches/{repo_name}")
+# async def name(repo_name:str,request:Request):
+#     installation_id = request.cookies.get(COOKIE_INSTALLATION_NAME)
+#     if not installation_id:
+#         return JSONResponse({"error": "No installation ID"}, status_code=400)
+    
+#     try:
+#       branches = await get_repo_branches(installation_id,repo_name)
+#       return JSONResponse({"Branches":branches})
+#     except Exception as e:
+#         return JSONResponse({"error": "Failed to fetch repositories"}, status_code=500)

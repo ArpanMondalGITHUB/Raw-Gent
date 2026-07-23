@@ -8,7 +8,7 @@ const Task = () => {
     const taskData = taskDataStr ?  JSON.parse(taskDataStr) : null;
 
      // ✅ Use WebSocket hook
-    const { isConnected, jobStatus, messages, onSendMessage } = useWebsocket(taskData?.job_id);
+    const { isConnected, jobStatus, messages, onSendMessage, onCreatePr } = useWebsocket(taskData?.job_id);
 
     if (!taskData?.job_id) {
         return (
@@ -25,6 +25,7 @@ const Task = () => {
             jobStatus = {jobStatus}
             messages = {messages}
             onSendMessage =  {onSendMessage}
+            onCreatePr = {onCreatePr}
             isConnected = {isConnected}
             />
             <Navbar/>
